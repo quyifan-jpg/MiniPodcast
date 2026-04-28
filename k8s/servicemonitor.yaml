@@ -1,0 +1,56 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: miniblog-api
+  namespace: monitoring        # 和 Prometheus 同 ns，跨 ns 也行但要配 RBAC
+  labels:
+    release: kps               # 必须，否则 kube-prometheus-stack 的 Prometheus 不选它
+spec:
+  namespaceSelector:
+    matchNames: [default]      # 去 default ns 找 Service
+  selector:
+    matchLabels:
+      app: api                 # 选 label app=api 的 Service
+  endpoints:
+    - port: http               # 必须和 Service 的 ports[].name 对得上
+      path: /metrics
+      interval: 15s
+---
+# 配套告警规则：API P99 高 + 错误率高
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: miniblog-api-alerts
+  namespace: monitoring
+  labels:
+    release: kps
+spec:
+  groups:
+    - name: miniblog.api
+      interval: 30s
+      rules:
+        - alert: ArticleApiHighP99
+          expr: |
+            histogram_quantile(0.99,
+              sum by (le) (rate(miniblog_article_query_duration_seconds_bucket{stage="total"}[5m]))
+            ) > 0.5
+          for: 2m
+          labels:
+            severity: warning
+            team: backend
+          annotations:
+            summary: "Article API P99 > 500ms"
+            description: "P99 latency over 500ms for 2 minutes"
+
+        - alert: ArticleApiErrorRate
+          expr: |
+            sum(rate(miniblog_article_requests_total{status="error"}[5m]))
+            / clamp_min(sum(rate(miniblog_article_requests_total[5m])), 0.001)
+            > 0.05
+          for: 2m
+          labels:
+            severity: critical
+            team: backend
+          annotations:
+            summary: "Article API error rate > 5%"
+            description: "Server-side errors above 5% for 2 minutes"

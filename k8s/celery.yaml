@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  labels: { app: celery-worker }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: celery-worker }
+  template:
+    metadata:
+      labels: { app: celery-worker }
+    spec:
+      containers:
+        - name: worker
+          image: miniblog-api:dev
+          imagePullPolicy: IfNotPresent
+          command: ["python", "celery_worker.py"]   # ← 唯一的关键差异
+          envFrom:
+            - configMapRef: { name: api-config }
+            - secretRef:    { name: api-secret }
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits:   { cpu: "1000m", memory: "1Gi" }
