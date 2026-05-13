@@ -245,6 +245,10 @@ coverage/
 # Local Docker / Milvus / MinIO data (never commit)
 volumes/
 
+# Personal interview notes (not part of the app)
+interview/
+interview.md
+
 # ============================================
 # 项目特定
 # ============================================
