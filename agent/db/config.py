@@ -10,10 +10,6 @@ DEFAULT_DB_PATHS = {
     "podcasts_db": "databases/podcasts.db",
     "tasks_db": "databases/tasks.db",
     "agent_session_db": "databases/agent_sessions.db",
-    "faiss_index_db": "databases/faiss/article_index.faiss",
-    "faiss_mapping_file": "databases/faiss/article_id_map.npy",
-    "chunk_faiss_index_db": "databases/faiss/chunk_index.faiss",
-    "chunk_faiss_mapping_file": "databases/faiss/chunk_id_map.npy",
     "internal_sessions_db": "databases/internal_sessions.db",
     "social_media_db": "databases/social_media.db",
     "slack_sessions_db": "databases/slack_sessions.db",
@@ -46,14 +42,6 @@ def get_tasks_db_path():
 
 def get_agent_session_db_path():
     return get_db_path("agent_session_db")
-
-
-def get_faiss_db_path():
-    return get_db_path("faiss_index_db"), get_db_path("faiss_mapping_file")
-
-
-def get_chunk_faiss_db_path():
-    return get_db_path("chunk_faiss_index_db"), get_db_path("chunk_faiss_mapping_file")
 
 
 def get_internal_sessions_db_path():

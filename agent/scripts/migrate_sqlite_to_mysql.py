@@ -13,7 +13,7 @@ from services.mysql_init import init_mysql_schema
 
 TABLES_TO_COPY = [
     ("sources_db", ["sources", "categories", "source_categories", "source_feeds"]),
-    ("tracking_db", ["feed_tracking", "feed_entries", "crawled_articles", "article_categories", "article_embeddings"]),
+    ("tracking_db", ["feed_tracking", "feed_entries", "crawled_articles", "article_categories"]),
     ("podcasts_db", ["podcasts"]),
     ("tasks_db", ["tasks", "task_executions", "podcast_configs"]),
     ("internal_sessions_db", ["session_state"]),

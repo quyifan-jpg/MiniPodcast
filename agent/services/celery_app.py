@@ -1,4 +1,5 @@
 from celery import Celery, Task
+from kombu import Queue
 import redis
 import os
 import time
@@ -6,7 +7,7 @@ import json
 import uuid
 import threading
 from dotenv import load_dotenv
-
+from loguru import logger
 
 # Load .env file from miniblog directory or parent directory
 env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
@@ -14,42 +15,52 @@ if not os.path.exists(env_path):
     env_path = os.path.join(os.path.dirname(__file__), ".env")
 load_dotenv(dotenv_path=env_path)
 
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
-REDIS_DB = int(os.environ.get("REDIS_DB", 0))
-REDIS_USERNAME = os.environ.get("REDIS_USERNAME", None)
-REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", None)
+# Use centralized config (import after dotenv so env vars are loaded)
+from core.config import settings  # noqa: E402
+
 REDIS_LOCK_EXP_TIME_SEC = 60 * 10
 REDIS_LOCK_INFO_EXP_TIME_SEC = 60 * 15
 STALE_LOCK_THRESHOLD_SEC = 60 * 15
 
-# Build Redis connection URL
-if REDIS_USERNAME and REDIS_PASSWORD:
-    redis_url = f"redis://{REDIS_USERNAME}:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
-    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB + 1, username=REDIS_USERNAME, password=REDIS_PASSWORD)
-elif REDIS_PASSWORD:
-    redis_url = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
-    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB + 1, password=REDIS_PASSWORD)
-else:
-    redis_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
-    redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB + 1)
+# Build Redis connection URL and client from settings
+redis_url = settings.redis_url
+redis_client = redis.Redis(**{**settings.redis_kwargs, "db": settings.redis_db + 1})
 
-# Debug: Print Redis connection info (without password)
-if REDIS_USERNAME or REDIS_PASSWORD:
-    print(f"[Redis Config] Using authenticated connection: redis://{REDIS_USERNAME or ''}:{'***' if REDIS_PASSWORD else ''}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
-else:
-    print(f"[Redis Config] Using unauthenticated connection: {redis_url}")
+logger.info(
+    "[Celery] Redis broker: redis://***@{host}:{port}/{db}",
+    host=settings.redis_host,
+    port=settings.redis_port,
+    db=settings.redis_db,
+)
 
 app = Celery("miniblog_tasks", broker=redis_url, backend=redis_url)
 
 app.conf.update(
     result_expires=60 * 2,
     task_track_started=True,
-    worker_concurrency=2,
+    worker_concurrency=settings.celery_worker_concurrency,
     task_acks_late=True,
-    task_time_limit=600,
-    task_soft_time_limit=540,
+    task_time_limit=settings.celery_task_time_limit,
+    task_soft_time_limit=settings.celery_task_soft_time_limit,
 )
+
+# ── Queue isolation (equivalent to CAgent's 9 named thread pool executors) ────
+# Separate queues prevent audio/crawl tasks from starving AI chat tasks.
+app.conf.task_queues = (
+    Queue("agent"),    # AI conversation tasks — highest priority
+    Queue("crawl"),    # Web crawling and article ingestion
+    Queue("media"),    # Audio/image generation — resource-intensive
+    Queue("default"),  # Catch-all for unrouted tasks
+)
+app.conf.task_default_queue = "default"
+app.conf.task_routes = {
+    "services.celery_tasks.agent_chat": {"queue": "agent"},
+    "services.celery_tasks_vector.embed_article": {"queue": "crawl"},
+    "services.celery_tasks_vector.index_pending_batch": {"queue": "crawl"},
+    # Add routing as new task types are created:
+    # "services.celery_tasks.generate_audio_*": {"queue": "media"},
+    # "services.celery_tasks.generate_image_*": {"queue": "media"},
+}
 
 # Release lock safely: only delete if the current lock value matches our owner token.
 # Also delete lock_info:{session_id} to avoid stale UI/task_id reads.
@@ -95,7 +106,7 @@ class SessionLockedTask(Task):
                     redis_client.delete(lock_key)
                     redis_client.delete(lock_info_key)
             except (ValueError, TypeError) as e:
-                print(f"Error checking lock time: {e}")
+                logger.warning("Error checking lock time: {e}", e=str(e))
 
         # Owner token is stored as the lock value so we can safely release via Lua.
         acquired = redis_client.set(lock_key, owner_token, nx=True, ex=REDIS_LOCK_EXP_TIME_SEC)
@@ -155,7 +166,7 @@ class SessionLockedTask(Task):
                                 pass
                 except Exception as e:
                     # Renewal failure shouldn't crash the task; stale lock cleanup will handle it.
-                    print(f"Error renewing lock for session {session_id}: {e}")
+                    logger.warning("Error renewing lock for session {sid}: {e}", sid=session_id, e=str(e))
 
                 stop_renew_event.wait(renew_interval_sec)
 
@@ -178,4 +189,4 @@ class SessionLockedTask(Task):
                 try:
                     redis_client.eval(_RELEASE_LOCK_LUA, 2, lock_key, lock_info_key, owner_token)
                 except Exception as e:
-                    print(f"Error releasing lock via Lua: {e}")
+                    logger.error("Error releasing lock via Lua: {e}", e=str(e))

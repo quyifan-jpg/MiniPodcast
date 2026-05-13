@@ -1,5 +1,6 @@
 from pydantic import BaseModel, validator
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
+from datetime import datetime
 from enum import Enum
 
 
@@ -9,7 +10,7 @@ class TaskType(str, Enum):
     ai_analyzer = "ai_analyzer"
     podcast_generator = "podcast_generator"
     embedding_processor = "embedding_processor"
-    faiss_indexer = "faiss_indexer"
+    chunk_processor = "chunk_processor"
     social_x_scraper = "social_x_scraper"
     social_fb_scraper = "social_fb_scraper"
 
@@ -36,10 +37,10 @@ TASK_TYPES = {
         "command": "python -m processors.embedding_processor",
         "description": "Generates embeddings for processed articles using OpenAI",
     },
-    "faiss_indexer": {
-        "name": "FAISS Indexer",
-        "command": "python -m processors.faiss_indexing_processor",
-        "description": "Updates FAISS vector index with new article embeddings",
+    "chunk_processor": {
+        "name": "Chunk Processor",
+        "command": "python -m processors.chunk_processor",
+        "description": "Splits articles into chunks and generates chunk-level embeddings for RAG",
     },
     "social_x_scraper": {
         "name": "X.com Scraper",
@@ -72,8 +73,8 @@ class TaskBase(BaseModel):
 class Task(TaskBase):
     id: int
     command: str
-    last_run: Optional[str] = None
-    created_at: Optional[str] = None
+    last_run: Optional[Union[str, datetime]] = None
+    created_at: Optional[Union[str, datetime]] = None
 
     class Config:
         from_attributes = True
@@ -96,8 +97,8 @@ class TaskExecution(BaseModel):
     id: int
     task_id: int
     task_name: Optional[str] = None
-    start_time: str
-    end_time: Optional[str] = None
+    start_time: Union[str, datetime]
+    end_time: Optional[Union[str, datetime]] = None
     status: str
     error_message: Optional[str] = None
     output: Optional[str] = None

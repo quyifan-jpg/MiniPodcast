@@ -1,21 +1,16 @@
 """
 Chunk-level vector search channel.
 
-Priority 1 — highest precision. Searches the FAISS chunk index to find
-the most relevant *passages* (not whole articles). This is the primary
-retrieval channel for podcast script generation.
-
-Wraps the existing logic in tools/chunk_search.py, extracting the pure
-retrieval functions without the Agno agent dependency.
+Priority 1 — highest precision. Searches the Milvus `chunk_vectors`
+collection to find the most relevant *passages* (not whole articles).
+This is the primary retrieval channel for podcast script generation.
 """
 
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 
-import numpy as np
 from loguru import logger
 
 from rag.channels.base import SearchChannel
@@ -23,18 +18,18 @@ from rag.models import ChannelResult, ChannelType, RetrievedChunk, SearchContext
 
 
 # ── Defaults ──────────────────────────────────────────────────────────
-EMBEDDING_MODEL = "text-embedding-3-small"
-MIN_SIMILARITY = 0.55          # slightly lower than the tool default (0.60)
-                                # because post-processors will filter further
+EMBEDDING_MODEL        = "text-embedding-3-small"
+MIN_SIMILARITY         = 0.22   # IP score threshold; post-processors filter further
 MAX_CHUNKS_PER_ARTICLE = 3
 
 
 class ChunkVectorChannel(SearchChannel):
     """
-    FAISS chunk-level semantic search.
+    Milvus chunk-level semantic search.
 
-    Reuses the existing FAISS index built by processors/chunk_processor.py.
-    Returns passages grouped by article, with best-similarity as the score.
+    Reads from the `chunk_vectors` collection populated by
+    processors/chunk_processor.py. Returns passages grouped by article,
+    with best-similarity as the score.
     """
 
     def __init__(
@@ -55,16 +50,16 @@ class ChunkVectorChannel(SearchChannel):
         return 1
 
     def is_enabled(self, context: SearchContext) -> bool:
-        from db.config import get_chunk_faiss_db_path
-
-        index_path, mapping_path = get_chunk_faiss_db_path()
-        exists = os.path.exists(index_path) and os.path.exists(mapping_path)
-        if not exists:
-            logger.warning("ChunkVectorChannel disabled: FAISS index not found")
-        return exists
+        try:
+            from db.milvus import get_milvus
+            get_milvus()
+            return True
+        except Exception as e:
+            logger.warning("ChunkVectorChannel disabled: Milvus unavailable ({e})", e=e)
+            return False
 
     async def search(self, context: SearchContext) -> ChannelResult:
-        # FAISS and OpenAI calls are blocking — run in thread pool
+        # Milvus and OpenAI calls are blocking — run in thread pool
         return await asyncio.to_thread(self._search_sync, context)
 
     def _search_sync(self, context: SearchContext) -> ChannelResult:
@@ -78,23 +73,30 @@ class ChunkVectorChannel(SearchChannel):
             logger.error("ChunkVectorChannel: failed to generate embedding")
             return ChannelResult.empty(ChannelType.CHUNK_VECTOR)
 
-        # 2. Search FAISS
-        from db.config import get_chunk_faiss_db_path, get_tracking_db_path
+        # 2. Search Milvus
+        from db.milvus import get_milvus
 
-        index_path, mapping_path = get_chunk_faiss_db_path()
-        scored_chunks = self._search_faiss(query_embedding, index_path, mapping_path, top_k)
-        if not scored_chunks:
+        try:
+            mv   = get_milvus()
+            hits = mv.search_chunks(query_embedding, top_k=top_k)
+        except Exception as e:
+            logger.error("Milvus chunk search failed: {e}", e=e)
             return ChannelResult.empty(ChannelType.CHUNK_VECTOR)
 
-        # 3. Fetch chunk texts and article metadata from DB
-        db_path = get_tracking_db_path()
-        chunk_ids = [cid for cid, _ in scored_chunks]
-        chunk_map = self._fetch_chunks(db_path, chunk_ids)
-        article_ids = list({c["article_id"] for c in chunk_map.values()})
+        # 3. Filter by threshold
+        hits = [h for h in hits if h["score"] >= self._min_similarity]
+        if not hits:
+            return ChannelResult.empty(ChannelType.CHUNK_VECTOR)
+
+        # 4. Fetch article metadata (published_date, source_id) from MySQL
+        from db.config import get_tracking_db_path
+
+        db_path     = get_tracking_db_path()
+        article_ids = list({h["article_id"] for h in hits})
         article_map = self._fetch_articles(db_path, article_ids)
 
-        # 4. Group by article, build RetrievedChunk list
-        chunks = self._group_by_article(scored_chunks, chunk_map, article_map)
+        # 5. Group by article, build RetrievedChunk list
+        chunks = self._group_by_article(hits, article_map)
 
         elapsed = (time.perf_counter() - start) * 1000
         logger.info(
@@ -125,51 +127,6 @@ class ChunkVectorChannel(SearchChannel):
             logger.error("Embedding generation failed: {e}", e=e)
             return None
 
-    def _search_faiss(
-        self,
-        query_embedding: list[float],
-        index_path: str,
-        mapping_path: str,
-        top_k: int,
-    ) -> list[tuple[int, float]]:
-        import faiss
-
-        try:
-            index = faiss.read_index(index_path)
-            id_map = np.load(mapping_path).tolist()
-        except Exception as e:
-            logger.error("FAISS load error: {e}", e=e)
-            return []
-
-        query_vec = np.array([query_embedding], dtype=np.float32)
-        distances, indices = index.search(query_vec, top_k)
-
-        results = []
-        for dist, idx in zip(distances[0], indices[0]):
-            if idx < 0 or idx >= len(id_map):
-                continue
-            similarity = float(np.exp(-dist)) if dist > 0 else 1.0
-            if similarity >= self._min_similarity:
-                results.append((id_map[idx], similarity))
-
-        results.sort(key=lambda x: x[1], reverse=True)
-        return results
-
-    def _fetch_chunks(self, db_path: str, chunk_ids: list[int]) -> dict[int, dict]:
-        if not chunk_ids:
-            return {}
-        from db.connection import execute_query
-
-        placeholders = ",".join(["%s"] * len(chunk_ids))
-        rows = execute_query(
-            db_path,
-            f"SELECT id, article_id, chunk_index, chunk_text "
-            f"FROM article_chunks WHERE id IN ({placeholders})",
-            chunk_ids,
-            fetch=True,
-        )
-        return {row["id"]: row for row in rows} if rows else {}
-
     def _fetch_articles(self, db_path: str, article_ids: list[int]) -> dict[int, dict]:
         if not article_ids:
             return {}
@@ -187,43 +144,40 @@ class ChunkVectorChannel(SearchChannel):
 
     def _group_by_article(
         self,
-        scored_chunks: list[tuple[int, float]],
-        chunk_map: dict[int, dict],
+        hits: list[dict],
         article_map: dict[int, dict],
     ) -> list[RetrievedChunk]:
-        """Group chunks by article, keep top N per article, return one RetrievedChunk per article."""
-        by_article: dict[int, list[tuple[dict, float]]] = {}
-        for chunk_id, sim in scored_chunks:
-            chunk = chunk_map.get(chunk_id)
-            if not chunk:
-                continue
-            aid = chunk["article_id"]
+        """Group hits by article_id, keep top N chunks per article, return one RetrievedChunk per article."""
+        by_article: dict[int, list[dict]] = {}
+        for hit in hits:
+            aid = hit["article_id"]
             if aid not in by_article:
                 by_article[aid] = []
             if len(by_article[aid]) < self._max_chunks_per_article:
-                by_article[aid].append((chunk, sim))
+                by_article[aid].append(hit)
 
         results = []
-        for article_id, chunk_sims in by_article.items():
-            article = article_map.get(article_id)
-            if not article:
-                continue
+        for article_id, chunk_hits in by_article.items():
+            chunk_hits.sort(key=lambda h: h["chunk_index"])
+            best_score = max(h["score"] for h in chunk_hits)
+            passages   = "\n\n---\n\n".join(h["chunk_text"] for h in chunk_hits)
 
-            chunk_sims.sort(key=lambda x: x[0]["chunk_index"])
-            best_sim = max(s for _, s in chunk_sims)
-            passages = "\n\n---\n\n".join(c["chunk_text"] for c, _ in chunk_sims)
+            # Milvus hit carries title+url; MySQL map carries published_date+source_id
+            article_meta = article_map.get(article_id, {})
+            title        = chunk_hits[0].get("title") or article_meta.get("title", "Untitled")
+            url          = chunk_hits[0].get("url")   or article_meta.get("url", "")
 
             results.append(RetrievedChunk(
                 id=str(article_id),
                 content=passages,
-                title=article.get("title", "Untitled"),
-                url=article.get("url", ""),
-                score=best_sim,
+                title=title,
+                url=url,
+                score=float(best_score),
                 source_channel=ChannelType.CHUNK_VECTOR,
                 metadata={
-                    "published_date": article.get("published_date", ""),
-                    "source_id": str(article.get("source_id", "")),
-                    "chunks_used": len(chunk_sims),
+                    "published_date": str(article_meta.get("published_date", "")),
+                    "source_id":      str(article_meta.get("source_id", "")),
+                    "chunks_used":    len(chunk_hits),
                 },
             ))
 

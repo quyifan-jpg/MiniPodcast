@@ -61,7 +61,7 @@ class SearchChannel(ABC):
 
         This method runs inside asyncio.gather(), so:
         - Use await for async I/O
-        - For sync code (FAISS, DB queries), use asyncio.to_thread()
+        - For sync code (Milvus, DB queries), use asyncio.to_thread()
         - Never block the event loop
         """
         ...

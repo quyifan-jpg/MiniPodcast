@@ -118,7 +118,7 @@ def _build_postprocessors():
 
 
 # ── Module-level singleton ────────────────────────────────────────────
-# Lazy initialization to avoid import-time side effects (FAISS loading etc.)
+# Lazy initialization to avoid import-time side effects (Milvus connection etc.)
 _engine: MultiChannelRetrievalEngine | None = None
 
 

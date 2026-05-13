@@ -1,8 +1,31 @@
 from typing import List, Optional, Dict, Any
 from fastapi import HTTPException
 import json
+import time
+from loguru import logger
 from services.db_service import tracking_db, sources_db
 from models.article_schemas import Article, PaginatedArticles
+
+# ── Prometheus metrics for the article module ─────────────────────────────────
+# 这是实习生该掌握的「业务自定义指标」做法：在自己的 service 里声明指标，
+# 不依赖平台组帮你接，做自己负责模块的可观测性。
+try:
+    from prometheus_client import Counter, Histogram
+
+    article_requests_total = Counter(
+        "miniblog_article_requests_total",
+        "Total article API requests",
+        ["endpoint", "status"],     # status: success / not_found / error
+    )
+    article_query_duration = Histogram(
+        "miniblog_article_query_duration_seconds",
+        "Article query duration broken down by stage",
+        ["endpoint", "stage"],      # stage: count / list / categories / total
+        buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
+    )
+    _metrics_enabled = True
+except ImportError:
+    _metrics_enabled = False
 
 
 class ArticleService:
@@ -27,6 +50,20 @@ class ArticleService:
         category: Optional[str] = None,
     ) -> PaginatedArticles:
         """Get articles with pagination and filtering."""
+        # 总耗时计时起点。注意用 perf_counter 而不是 time.time —— 单调时钟，不受系统时间调整影响。
+        t_start = time.perf_counter()
+        # 进入接口先打 INFO 日志，带上所有过滤参数。出问题时这条日志告诉你「谁请求的什么」。
+        # 注意：不要打用户敏感信息（手机号、token）。这里都是公开过滤条件，安全。
+        logger.info(
+            "get_articles start",
+            page=page,
+            per_page=per_page,
+            source=source,
+            category=category,
+            date_from=date_from,
+            date_to=date_to,
+            has_search=bool(search),   # search 可能是用户输入，只记是否有，不记内容,避免日志放敏感信息
+        )
         try:
             offset = (page - 1) * per_page
             query_parts = [
@@ -69,13 +106,23 @@ class ArticleService:
                 "SELECT ca.id, ca.title, ca.url, ca.published_date, ca.summary, ca.feed_id",
                 "SELECT COUNT(*)",
             )
+            # 给 count 查询单独计时 —— 经常 count 比 list 还慢，分开看才能定位瓶颈
+            t_count = time.perf_counter()
             total_articles = await tracking_db.execute_query(count_query, tuple(query_params), fetch=True, fetch_one=True)
+            count_dur = time.perf_counter() - t_count
+            if _metrics_enabled:
+                article_query_duration.labels(endpoint="get_articles", stage="count").observe(count_dur)
+
             total_count = total_articles.get("COUNT(*)", 0) if total_articles else 0
             query_parts.append("ORDER BY ca.published_date DESC, ca.id DESC")
             query_parts.append("LIMIT ? OFFSET ?")
             query_params.extend([per_page, offset])
             articles_query = " ".join(query_parts)
+            t_list = time.perf_counter()
             articles = await tracking_db.execute_query(articles_query, tuple(query_params), fetch=True)
+            list_dur = time.perf_counter() - t_list
+            if _metrics_enabled:
+                article_query_duration.labels(endpoint="get_articles", stage="list").observe(list_dur)
             feed_ids = [article["feed_id"] for article in articles if article.get("feed_id")]
             source_names = {}
             if feed_ids:
@@ -97,6 +144,22 @@ class ArticleService:
             total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 0
             has_next = page < total_pages
             has_prev = page > 1
+            total_dur = time.perf_counter() - t_start
+            # 成功路径打 INFO，带核心数字。这条日志能让排查者一眼看到「这个请求慢，但 SQL 不慢」之类的判断
+            logger.info(
+                "get_articles success",
+                page=page,
+                per_page=per_page,
+                returned=len(articles),
+                total=total_count,
+                duration_ms=int(total_dur * 1000),
+                count_ms=int(count_dur * 1000),
+                list_ms=int(list_dur * 1000),
+            )
+            if _metrics_enabled:
+                article_requests_total.labels(endpoint="get_articles", status="success").inc()
+                article_query_duration.labels(endpoint="get_articles", stage="total").observe(total_dur)
+
             return PaginatedArticles(
                 items=articles,
                 total=total_count,
@@ -106,9 +169,24 @@ class ArticleService:
                 has_next=has_next,
                 has_prev=has_prev,
             )
+        except HTTPException:
+            # 业务异常（4xx）走单独分支，不打 ERROR —— 不是 bug，不需要告警
+            if _metrics_enabled:
+                article_requests_total.labels(endpoint="get_articles", status="client_error").inc()
+            raise
         except Exception as e:
-            if isinstance(e, HTTPException):
-                raise e
+            # 真 bug 走 ERROR + exception，loguru 会自动带上完整 traceback
+            # 这是「错误日志能定位 bug」的关键：上下文 + 堆栈 + 业务参数齐全
+            logger.exception(
+                "get_articles failed",
+                page=page,
+                per_page=per_page,
+                source=source,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            if _metrics_enabled:
+                article_requests_total.labels(endpoint="get_articles", status="error").inc()
             raise HTTPException(status_code=500, detail=f"Error fetching articles: {str(e)}")
 
     async def get_article(self, article_id: int) -> Article:

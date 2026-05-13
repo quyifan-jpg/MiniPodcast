@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # ── MySQL 8.0 ─────────────────────────────────────────────────────────────
   mysql:
     image: mysql:8.0
     ports:
@@ -8,16 +9,59 @@ services:
     environment:
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
       - MYSQL_DATABASE=${MYSQL_DATABASE:-miniblog}
-    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --slow-query-log=ON
+      --long-query-time=2
     volumes:
       - mysql-data:/var/lib/mysql
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
+  # ── Redis 7 ───────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-root}
+      --appendonly yes
+      --appendfsync everysec
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-root}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ── FastAPI (main API server) ──────────────────────────────────────────────
   api:
     build: .
     ports:
       - "8000:8000"
     environment:
+      - APP_ENV=${APP_ENV:-production}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-root}
@@ -25,9 +69,14 @@ services:
       - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://root:root@mysql:3306/miniblog}
       - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ELEVENSLAB_API_KEY=${ELEVENSLAB_API_KEY:-}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-["http://localhost:3000"]}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
     depends_on:
-      - redis
-      - mysql
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
     volumes:
       - ./databases:/app/databases
       - ./podcasts:/app/podcasts
@@ -38,11 +87,24 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
+  # ── Celery Workers ────────────────────────────────────────────────────────
   celery:
     build: .
     command: python celery_worker.py
     environment:
+      - APP_ENV=${APP_ENV:-production}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-root}
@@ -50,10 +112,14 @@ services:
       - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://root:root@mysql:3306/miniblog}
       - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ELEVENSLAB_API_KEY=${ELEVENSLAB_API_KEY:-}
     depends_on:
-      - redis
-      - api
-      - mysql
+      redis:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      api:
+        condition: service_healthy
     volumes:
       - ./databases:/app/databases
       - ./podcasts:/app/podcasts
@@ -61,29 +127,45 @@ services:
     restart: unless-stopped
     deploy:
       replicas: 2
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
+  # ── APScheduler ───────────────────────────────────────────────────────────
   scheduler:
     build: .
     command: python scheduler.py
     environment:
+      - APP_ENV=${APP_ENV:-production}
       - DATABASE_URL=${DATABASE_URL:-mysql+pymysql://root:root@mysql:3306/miniblog}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-root}
+      - REDIS_DB=${REDIS_DB:-0}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./databases:/app/databases
     restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    command: redis-server --requirepass ${REDIS_PASSWORD:-root}
-    volumes:
-      - redis-data:/data
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
 volumes:
   redis-data:

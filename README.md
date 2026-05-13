@@ -51,7 +51,7 @@ Table of Contents
 - [Troubleshooting](#troubleshooting)
   - [Kokoro Library Installation Issues](#kokoro-library-installation-issues)
   - [Browseruse Installation Issues](#browseruse-installation-issues)
-  - [FAISS Library Installation Issues](#faiss-library-installation-issues)
+  - [Milvus Setup Issues](#milvus-setup-issues)
   - [Browser-Based Data Collection Issues](#browser-based-data-collection-issues)
 - [Updates](#updates)
 
@@ -162,8 +162,8 @@ MiniBlog includes several specialized processors for different content sources:
 - **RSS Feed Processor** - Monitors RSS feeds for new articles and content
 - **URL Content Processor** - Extracts and processes content from web pages
 - **AI Content Analyzer** - Categorizes, summarizes, and analyzes content quality
-- **Vector Embedding Processor** - Creates searchable vector representations of content
-- **FAISS Search Indexer** - Builds search indices for content discovery
+- **Vector Embedding Processor** - Creates searchable vector representations of content and indexes them into Milvus
+- **Chunk Processor** - Splits articles into overlapping passages for chunk-level RAG retrieval
 - **Podcast Script Generator** - Creates complete podcast episodes from curated content
 - **X.com Social Processor** - Crawls and processes your X.com social media feed
 - **Facebook Social Processor** - Crawls and processes your Facebook social media feed
@@ -646,11 +646,39 @@ If your installation fails due to browseruse, make sure the Playwright version i
 
 For more reference and troubleshooting: https://github.com/browser-use/browser-use
 
-### FAISS Library Installation Issues
+### Milvus Setup Issues
 
-If the FAISS library installation fails, you can safely ignore this error and skip installing FAISS. This library is only required if you want to use the semantic search feature. If you don't need semantic search functionality, you can safely ignore the FAISS installation failure.
+MiniBlog uses [Milvus](https://milvus.io/) as its vector database for semantic
+search (both article-level and chunk-level RAG). Milvus runs as three containers:
+`milvus-standalone`, `milvus-etcd`, and `milvus-minio`.
 
-For reference: https://github.com/facebookresearch/faiss
+Start the full stack from the project root:
+
+```bash
+docker compose -f milvus-docker-compose.yml up -d
+```
+
+Verify readiness (takes ~60s on first boot):
+
+```bash
+curl http://localhost:9091/healthz   # → OK
+```
+
+If `/healthz` returns `component proxy state is Abnormal`, wait another 30s
+and retry — the proxy component is slow to come up but port 19530 is usable
+once reported OK.
+
+Common issues:
+- **`Fail connecting to server on localhost:19530`** — etcd or minio not
+  running. Check `docker ps` and ensure all three `milvus-*` containers
+  are healthy.
+- **Empty search results** — no vectors indexed yet. Run the embedding +
+  chunk processors: `python -m processors.embedding_processor` and
+  `python -m processors.chunk_processor`.
+- **Stopped containers** — `docker start milvus-etcd milvus-minio milvus-standalone`
+  (order matters: etcd/minio before standalone).
+
+For reference: https://milvus.io/docs
 
 ### Browser-Based Data Collection Issues
 

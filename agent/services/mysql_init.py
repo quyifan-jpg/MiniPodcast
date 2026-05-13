@@ -97,16 +97,6 @@ MYSQL_TABLE_DDLS = [
     )
     """,
     """
-    CREATE TABLE IF NOT EXISTS article_embeddings (
-        id BIGINT PRIMARY KEY AUTO_INCREMENT,
-        article_id BIGINT NOT NULL,
-        embedding LONGBLOB NOT NULL,
-        embedding_model VARCHAR(255) NOT NULL,
-        created_at VARCHAR(64) NOT NULL,
-        in_faiss_index BOOLEAN DEFAULT FALSE
-    )
-    """,
-    """
     CREATE TABLE IF NOT EXISTS podcasts (
         id BIGINT PRIMARY KEY AUTO_INCREMENT,
         title TEXT,
@@ -145,7 +135,7 @@ MYSQL_TABLE_DDLS = [
         status VARCHAR(32) NOT NULL,
         error_message LONGTEXT,
         output LONGTEXT
-    )
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     """,
     """
     CREATE TABLE IF NOT EXISTS podcast_configs (
@@ -216,6 +206,30 @@ MYSQL_TABLE_DDLS = [
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS article_chunks (
+        id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+        article_id  BIGINT NOT NULL,
+        chunk_index INT    NOT NULL,
+        chunk_text  TEXT   NOT NULL,
+        created_at  TEXT NOT NULL,
+        INDEX idx_ac_article_id (article_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS podcast_sessions (
+        session_id VARCHAR(255) NOT NULL PRIMARY KEY,
+        user_id TEXT,
+        memory JSON,
+        session_data JSON,
+        extra_data JSON,
+        created_at BIGINT,
+        updated_at BIGINT,
+        agent_id TEXT,
+        team_session_id TEXT,
+        agent_data JSON
+    )
+    """,
 ]
 
 
@@ -230,8 +244,6 @@ MYSQL_INDEX_DDLS = [
     "CREATE INDEX idx_crawled_articles_ai_status ON crawled_articles(ai_status)",
     "CREATE INDEX idx_crawled_articles_processed ON crawled_articles(processed)",
     "CREATE INDEX idx_article_categories_category_name ON article_categories(category_name)",
-    "CREATE INDEX idx_article_embeddings_article_id ON article_embeddings(article_id)",
-    "CREATE INDEX idx_article_embeddings_in_faiss ON article_embeddings(in_faiss_index)",
     "CREATE INDEX idx_podcasts_date ON podcasts(date)",
     "CREATE INDEX idx_tasks_enabled ON tasks(enabled)",
     "CREATE INDEX idx_tasks_last_run ON tasks(last_run)",
@@ -264,5 +276,15 @@ def init_mysql_schema():
             except Exception as e:
                 if not _is_duplicate_index_error(e):
                     raise
+
+        # Scheduler stores subprocess stdout/stderr; tools often emit Unicode box-drawing etc.
+        # If these columns were created under latin1 (older MySQL defaults), INSERT fails with 1366.
+        cursor.execute(
+            """
+            ALTER TABLE task_executions
+                MODIFY error_message LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+                MODIFY output LONGTEXT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
+            """
+        )
 
         conn.commit()

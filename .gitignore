@@ -242,6 +242,9 @@ htmlcov/
 test-results/
 coverage/
 
+# Local Docker / Milvus / MinIO data (never commit)
+volumes/
+
 # ============================================
 # 项目特定
 # ============================================

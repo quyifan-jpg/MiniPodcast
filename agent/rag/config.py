@@ -34,11 +34,11 @@ class RAGSettings(BaseSettings):
     channel_timeout_s: float = Field(default=30.0, description="Per-channel timeout in seconds")
 
     # ── Chunk Vector Channel ──────────────────────────────────────────
-    chunk_min_similarity: float = Field(default=0.55, description="Min cosine similarity for chunks")
+    chunk_min_similarity: float = Field(default=0.22, description="Min IP similarity for chunks (OpenAI embeddings)")
     chunk_max_per_article: int = Field(default=3, description="Max chunks kept per article")
 
     # ── Article Vector Channel ────────────────────────────────────────
-    article_min_similarity: float = Field(default=0.70, description="Min cosine similarity for articles")
+    article_min_similarity: float = Field(default=0.35, description="Min IP similarity for articles (OpenAI embeddings)")
 
     # ── Social Media Channel ──────────────────────────────────────────
     social_media_days_back: int = Field(default=7, description="How many days back to search")

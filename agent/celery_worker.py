@@ -1,4 +1,6 @@
 from services.celery_tasks import app
+# Import side-effect: registers vector-index tasks with the Celery app.
+import services.celery_tasks_vector  # noqa: F401
 
 worker_options = [
     "worker",

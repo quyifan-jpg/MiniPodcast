@@ -16,6 +16,7 @@ from db.tasks import (
     update_task_last_run,
     update_task_execution,
 )
+from services.mysql_init import init_mysql_schema
 
 running = True
 MAX_WORKERS = 5
@@ -60,7 +61,6 @@ def cleanup_stuck_tasks():
 def execute_task(task_id, command):
     tasks_db_path = get_tasks_db_path()
     with db_connection(tasks_db_path) as conn:
-        conn.execute("BEGIN EXCLUSIVE TRANSACTION")
         try:
             cursor = conn.cursor()
             cursor.execute(
@@ -189,6 +189,7 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     print("INFO: Starting task scheduler")
     tasks_db_path = get_tasks_db_path()
+    init_mysql_schema()
     cleanup_stuck_tasks()
     database_url = os.environ.get("DATABASE_URL", "")
     jobstores = {"default": SQLAlchemyJobStore(url=database_url)}

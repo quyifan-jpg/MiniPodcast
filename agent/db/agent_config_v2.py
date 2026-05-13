@@ -175,4 +175,11 @@ def _get_mysql_db_url() -> str:
     return db_url
 
 
-STORAGE = SingleStoreStorage(table_name="podcast_sessions", schema=None, db_url=_get_mysql_db_url())
+def _get_mysql_db_name() -> str:
+    """Extract database name from DATABASE_URL for use as agno storage schema."""
+    from urllib.parse import urlparse
+    db_url = os.environ.get("DATABASE_URL", "")
+    return urlparse(db_url).path.lstrip("/")
+
+
+STORAGE = SingleStoreStorage(table_name="podcast_sessions", schema=_get_mysql_db_name(), db_url=_get_mysql_db_url())

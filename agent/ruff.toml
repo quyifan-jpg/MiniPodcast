@@ -1,1 +1,31 @@
-line-length = 150
+line-length = 120
+target-version = "py311"
+
+[lint]
+select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes
+  "W",   # pycodestyle warnings
+  "I",   # isort
+  "N",   # pep8-naming
+  "UP",  # pyupgrade
+  "B",   # bugbear
+  "S",   # bandit security
+]
+ignore = [
+  "S101",  # allow assert (used in tests)
+  "B008",  # allow FastAPI Depends() in default arguments
+  "S603",  # allow subprocess calls
+  "S607",  # allow partial executable paths
+  "N806",  # allow uppercase variable names (common in AI code)
+  "E501",  # line length handled by formatter
+]
+
+[lint.per-file-ignores]
+"tests/**/*.py" = ["S", "N"]   # relax security/naming in tests
+"migrations/**/*.py" = ["N"]   # relax naming in migration files
+
+[format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"

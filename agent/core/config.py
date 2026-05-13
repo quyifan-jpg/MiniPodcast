@@ -79,6 +79,11 @@ class Settings(BaseSettings):
     circuit_breaker_failure_threshold: int = 5
     circuit_breaker_recovery_timeout: int = 60
 
+    # ── Observability ───────────────────────────────────────────────────────
+    # prometheus_fastapi_instrumentator walks every route at import time; under
+    # debugpy this can look like a hang. Set PROMETHEUS_INSTRUMENT_HTTP=false to skip.
+    prometheus_instrument_http: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

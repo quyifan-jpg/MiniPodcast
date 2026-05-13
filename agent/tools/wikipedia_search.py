@@ -29,7 +29,14 @@ def wikipedia_search(agent: Agent, query: str, srlimit: int = 5) -> str:
             "srlimit": srlimit,
             "utf8": 1,
         }
-        search_response = requests.get(search_url, params=search_params)
+        search_response = requests.get(search_url, params=search_params, timeout=10)
+        if search_response.status_code != 200:
+            print(f"Wikipedia API returned status {search_response.status_code}")
+            return f"Wikipedia API error: HTTP {search_response.status_code}"
+        content_type = search_response.headers.get("Content-Type", "")
+        if "json" not in content_type:
+            print(f"Wikipedia returned non-JSON response: {content_type}, body: {search_response.text[:200]}")
+            return "Wikipedia API returned non-JSON response (possibly blocked or rate-limited)."
         search_data = search_response.json()
         if (
             "query" not in search_data

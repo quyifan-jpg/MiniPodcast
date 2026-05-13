@@ -1,107 +1,79 @@
-from typing import List
+"""
+Search agent tool — called by the main Agno orchestrator in celery_tasks.py.
+
+Previously: created an Agno Agent with 10 tools and called .run().
+            The LLM chose tools implicitly through OpenAI function-calling with
+            no visible reasoning chain.
+
+Now: delegates to graph.search_scrape_graph.run_search_pipeline() which runs a
+     LangGraph ReAct agent (langgraph.prebuilt.create_react_agent).
+
+     Explicit Thought / Action / Observation loop:
+       ┌─ Thought  ─ LLM decides which tool to call
+       ├─ Action   ─ tool is invoked (search_chunks, search_google_news, …)
+       ├─ Observation ─ tool result fed back to LLM
+       └─ … repeat until the agent is satisfied …
+       └─ Format   ─ response_format step coerces output into SearchResults
+
+     The full chain is printed to stdout, making the agent's reasoning
+     fully observable without external tooling.
+
+External API (used by celery_tasks.py):
+  search_agent_run(agent, query) → str   ← unchanged
+
+Re-exported models (kept here for backward-compat imports in other modules):
+  ReturnItem, SearchResults
+"""
+
+from __future__ import annotations
+
 from agno.agent import Agent
-from agno.models.openai import OpenAIChat
-from pydantic import BaseModel, Field
-from dotenv import load_dotenv
-from agno.tools.duckduckgo import DuckDuckGoTools
-from textwrap import dedent
-from tools.wikipedia_search import wikipedia_search
-from tools.google_news_discovery import google_news_discovery_run
-from tools.jikan_search import jikan_search
-from tools.embedding_search import embedding_search
-from tools.chunk_search import chunk_search
-from tools.social_media_search import social_media_search, social_media_trending_search
-from tools.search_articles import search_articles
-from tools.web_search import run_browser_search
 
-
-load_dotenv()
-
-
-class ReturnItem(BaseModel):
-    url: str = Field(..., description="The URL of the search result")
-    title: str = Field(..., description="The title of the search result")
-    description: str = Field(..., description="A brief description or summary of the search result content")
-    source_name: str = Field(
-        ...,
-        description="The name/type of the source (e.g., 'wikipedia', 'general', or any reputable source tag)",
-    )
-    tool_used: str = Field(
-        ...,
-        description="The tools used to generate the search results, unknown if not used or not applicable",
-    )
-    published_date: str = Field(
-        ...,
-        description="The published date of the content in ISO format, if not available keep it empty",
-    )
-    is_scrapping_required: bool = Field(
-        ...,
-        description="Set to True if the content need scraping, False otherwise, default keep it True if not sure",
-    )
-
-
-class SearchResults(BaseModel):
-    items: List[ReturnItem] = Field(..., description="A list of search result items")
-
-
-SEARCH_AGENT_DESCRIPTION = "You are a helpful assistant that can search the web for information."
-SEARCH_AGENT_INSTRUCTIONS = dedent("""
-    You are a helpful assistant that can search the web or any other sources for information.
-    You should create topic for the search from the given query instead of blindly apply the query to the search tools.
-    For a given topic, your job is to search the web or any other sources and return the top 5 to 10 sources about the topic.
-    Keep the search sources of high quality and reputable, and sources should be relevant to the asked topic.
-    Sources should be from diverse platforms with no duplicates.
-    IMPORTANT: User queries might be fuzzy or misspelled. Understand the user's intent and act accordingly.
-    IMPORTANT: The output source_name field can be one of ["wikipedia", "general", or any source tag used"].
-    IMPORTANT: You have access to different search tools use them when appropriate which one is best for the given search query. Don't use particular tool if not required.
-    IMPORTANT: Make sure you are able to detect what tool to use and use it available tool tags = ["google_news_discovery", "duckduckgo", "wikipedia_search", "jikan_search", "social_media_search", "social_media_trending_search", "browser_search", "unknown"].
-    IMPORTANT: If query is news related please prefere google news over other news tools.
-    IMPORTANT: If returned sources are not of high quality or not relevant to the asked topic, don't include them in the returned sources.
-    IMPORTANT: Never include dates to the search query unless user explicitly asks for it.
-    IMPORTANT: You are allowed to use appropriate tools to get the best results even the single tool return enough results diverse check is better.
-    IMPORTANT: You have access to browser agent for searching as well use it when other source can't suitable for the given tasks but input should detailed instruction to the run_browser_search agent to get the best results and also use it conservatively because it's expensive process.
-    """)
+# Re-export Pydantic models from their new canonical location
+from graph.state import ReturnItem, SearchResults  # noqa: F401
 
 
 def search_agent_run(agent: Agent, query: str) -> str:
     """
-    Search Agent which searches the web and other sources for relevant sources about the given topic or query.
+    Agno tool: search for high-quality, diverse sources about the given topic.
+
+    Internally runs a LangGraph ReAct loop with 10 project search tools.
+    Results are saved into the shared session state so that subsequent tools
+    (scrape_agent_run, podcast_script_agent_run, …) can access them.
+
     Args:
-        agent: The agent instance
-        query: The search query
+        agent: Agno Agent instance — provides agent.session_id.
+        query: The search intent / topic (may contain typos; intent is inferred).
+
     Returns:
-        A formatted string response with the search results (link and gist only)
+        Human-readable status string consumed by the main orchestrator as an
+        Observation in its own (Agno) tool-calling loop.
     """
-    print("Search Agent Input:", query)
+    print(f"\n[search_agent_run] query='{query}'")
     session_id = agent.session_id
+
     from services.internal_session_service import SessionService
+    from graph.search_scrape_graph import run_search_pipeline
 
     session = SessionService.get_session(session_id)
     current_state = session["state"]
-    search_agent = Agent(
-        model=OpenAIChat(id="gpt-4o-mini"),
-        instructions=SEARCH_AGENT_INSTRUCTIONS,
-        description=SEARCH_AGENT_DESCRIPTION,
-        use_json_mode=True,
-        response_model=SearchResults,
-        tools=[
-            google_news_discovery_run,
-            DuckDuckGoTools(),
-            wikipedia_search,
-            jikan_search,
-            embedding_search,
-            chunk_search,
-            social_media_search,
-            social_media_trending_search,
-            search_articles,
-            run_browser_search,
-        ],
-        session_id=session_id,
-    )
-    response = search_agent.run(query, session_id=session_id)
-    response_dict = response.to_dict()
+
+    # ── Run LangGraph ReAct search pipeline ──────────────────────────────────
+    items = run_search_pipeline(query, session_id)
+
+    # ── Persist results into session state ───────────────────────────────────
     current_state["stage"] = "search"
-    current_state["search_results"] = response_dict["content"]["items"]
+    current_state["search_results"] = items
     SessionService.save_session(session_id, current_state)
-    has_results = "search_results" in current_state and current_state["search_results"]
-    return f"Found {len(response_dict['content']['items'])} sources about {query} {'and added to the search_results' if has_results else ''}"
+
+    count = len(items)
+    if count:
+        return (
+            f"Found {count} sources about '{query}' and added them to "
+            f"search_results. The sources are now visible in the UI for the "
+            f"user to review and select from."
+        )
+    return (
+        f"Search completed for '{query}' but no high-quality sources were found. "
+        f"Consider asking the user for more details or trying a different query."
+    )

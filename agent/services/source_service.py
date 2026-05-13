@@ -194,7 +194,7 @@ class SourceService:
     async def add_source_category(self, source_id: int, category_name: str) -> None:
         """Add a category to a source, creating the category if it doesn't exist."""
         category_query = """
-        INSERT OR IGNORE INTO categories (name, created_at)
+        INSERT IGNORE INTO categories (name, created_at)
         VALUES (?, ?)
         """
         await sources_db.execute_query(category_query, (category_name, datetime.now().isoformat()))
@@ -203,7 +203,7 @@ class SourceService:
         if not category:
             raise HTTPException(status_code=500, detail=f"Failed to find or create category: {category_name}")
         link_query = """
-        INSERT OR IGNORE INTO source_categories (source_id, category_id)
+        INSERT IGNORE INTO source_categories (source_id, category_id)
         VALUES (?, ?)
         """
         await sources_db.execute_query(link_query, (source_id, category["id"]))

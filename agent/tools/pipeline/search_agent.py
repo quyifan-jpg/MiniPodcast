@@ -53,8 +53,9 @@ SEARCH_AGENT_INSTRUCTIONS = dedent("""
     IMPORTANT: User queries might be fuzzy or misspelled. Understand the user's intent and act accordingly.
     IMPORTANT: The output source_name field can be one of ["wikipedia", "general", or any source tag used"].
     IMPORTANT: You have access to different search tools use them when appropriate which one is best for the given search query. Don't use particular tool if not required.
-    IMPORTANT: Make sure you are able to detect what tool to use and use it available tool tags = ["google_news_discovery", "duckduckgo", "wikipedia_search", "jikan_search", "social_media_search", "social_media_trending_search", "unknown"].
-    IMPORTANT: If query is news related please prefere google news over other news tools.
+    IMPORTANT: Make sure you are able to detect what tool to use and use it available tool tags = ["google_news_discovery", "duckduckgo", "wikipedia_search", "jikan_search", "social_media_search", "social_media_trending_search", "chunk_search", "embedding_search", "unknown"].
+    IMPORTANT: Always call chunk_search first for any topic — it searches the internal article database at the passage level and returns the most relevant paragraphs. Use embedding_search as a fallback if chunk_search returns no results.
+    IMPORTANT: If query is news related please prefer google news over other news tools.
     IMPORTANT: If returned sources are not of high quality or not relevant to the asked topic, don't include them in the returned sources.
     IMPORTANT: Never include dates to the search query unless user explicitly asks for it.
     IMPORTANT: You are allowed to use appropriate tools to get the best results even the single tool return enough results diverse check is better.

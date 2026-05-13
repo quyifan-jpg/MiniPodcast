@@ -72,8 +72,9 @@ def image_generation_agent_run(agent: Agent, query: str) -> str:
     print("Image Generation Agent input: ", query)
 
     try:
+        from services.model_router import router
         image_agent = Agent(
-            model=OpenAIChat(id="gpt-4o"),
+            model=router.get_agno_model(),
             tools=[DalleTools()],
             description=IMAGE_GENERATION_AGENT_DESCRIPTION,
             instructions=IMAGE_GENERATION_AGENT_INSTRUCTIONS,

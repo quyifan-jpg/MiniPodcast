@@ -86,7 +86,7 @@ def update_tracking_info(tracking_db_path, feeds):
         for feed in feeds:
             cursor.execute(
                 """
-            INSERT OR IGNORE INTO feed_tracking 
+            INSERT IGNORE INTO feed_tracking 
             (feed_id, source_id, feed_url, last_processed)
             VALUES (?, ?, ?, NULL)
             """,
@@ -145,7 +145,7 @@ def mark_entries_as_processing(tracking_db_path, entry_ids):
 
 def ensure_feed_tracking_exists(tracking_db_path, feed_id, source_id, feed_url):
     query = """
-    INSERT OR IGNORE INTO feed_tracking 
+    INSERT IGNORE INTO feed_tracking 
     (feed_id, source_id, feed_url, last_processed)
     VALUES (?, ?, ?, NULL)
     """

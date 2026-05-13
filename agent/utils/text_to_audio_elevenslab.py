@@ -1,16 +1,38 @@
 import os
-from typing import List, Tuple, Optional, Any
+from typing import Any, Generator, List, Optional, Tuple
 import tempfile
 import numpy as np
 import soundfile as sf
 from elevenlabs.client import ElevenLabs
+from loguru import logger
+
+from core.exceptions import RemoteException
+from decorators.circuit_breaker import elevenlabs_breaker
 
 TEXT_TO_SPEECH_MODEL = "eleven_multilingual_v2"
 
 
+@elevenlabs_breaker
+def _elevenlabs_generate(
+    client: ElevenLabs,
+    text: str,
+    voice: str,
+    model_id: str,
+) -> Generator:
+    """
+    Thin wrapper around client.generate() protected by the ElevenLabs circuit breaker.
+
+    Extracted as a module-level function so @elevenlabs_breaker can decorate it.
+    When the circuit is OPEN (ElevenLabs is down), this raises RemoteException
+    immediately without calling the API — protecting Celery worker threads from
+    hanging on a dead connection.
+    """
+    return client.generate(text=text, voice=voice, model=model_id, stream=True)
+
+
 def create_silence_audio(silence_duration: float, sampling_rate: int) -> np.ndarray:
     if sampling_rate <= 0:
-        print(f"Warning: Invalid sampling rate ({sampling_rate}) for silence generation")
+        logger.warning("Invalid sampling rate ({rate}) for silence generation", rate=sampling_rate)
         return np.zeros(0, dtype=np.float32)
     return np.zeros(int(sampling_rate * silence_duration), dtype=np.float32)
 
@@ -36,12 +58,12 @@ def combine_audio_segments(audio_segments: List[np.ndarray], silence_duration: f
 
 def write_to_disk(output_path: str, audio_data: np.ndarray, sampling_rate: int) -> None:
     if sampling_rate <= 0:
-        print(f"Error: Cannot write audio file with invalid sampling rate ({sampling_rate})")
+        logger.error("Cannot write audio file with invalid sampling rate ({rate})", rate=sampling_rate)
         return
     try:
         sf.write(output_path, audio_data, sampling_rate)
     except Exception as e:
-        print(f"Error writing audio file '{output_path}': {e}")
+        logger.error("Error writing audio file '{path}': {e}", path=output_path, e=e)
 
 
 def text_to_speech_elevenlabs(
@@ -55,21 +77,20 @@ def text_to_speech_elevenlabs(
         return None
     voice_name_or_id = voice_map.get(speaker_id)
     if not voice_name_or_id:
-        print(f"No voice found for speaker_id {speaker_id}")
+        logger.warning("No voice found for speaker_id {sid}", sid=speaker_id)
         return None
     try:
         from pydub import AudioSegment
-
         pydub_available = True
     except ImportError:
         pydub_available = False
+
+    # RemoteException (circuit breaker OPEN) is intentionally NOT caught here.
+    # It propagates up to create_podcast(), which aborts the whole job rather
+    # than silently skipping segments while the circuit is open.
+    audio_generator = _elevenlabs_generate(client, text, voice_name_or_id, model_id)
+
     try:
-        audio_generator = client.generate(
-            text=text,
-            voice=voice_name_or_id,
-            model=model_id,
-            stream=True,
-        )
         audio_chunks = []
         for chunk in audio_generator:
             if chunk:
@@ -94,18 +115,17 @@ def text_to_speech_elevenlabs(
                 os.unlink(temp_path)
                 return samples, frame_rate
             except Exception as pydub_error:
-                print(f"Pydub processing failed: {pydub_error}")
+                logger.warning("Pydub processing failed: {e}", e=pydub_error)
         try:
             audio_np, samplerate = sf.read(temp_path)
             os.unlink(temp_path)
             return audio_np, samplerate
-        except Exception as _:
+        except Exception:
             if pydub_available:
                 try:
                     sound = AudioSegment.from_mp3(temp_path)
                     wav_path = temp_path.replace(".mp3", ".wav")
                     sound.export(wav_path, format="wav")
-
                     audio_np, samplerate = sf.read(wav_path)
                     os.unlink(temp_path)
                     os.unlink(wav_path)
@@ -117,10 +137,7 @@ def text_to_speech_elevenlabs(
         return None
 
     except Exception as e:
-        print(f"Error during ElevenLabs API call: {e}")
-        import traceback
-
-        traceback.print_exc()
+        logger.error("Error processing ElevenLabs audio response: {e}", e=e)
         return None
 
 
@@ -135,16 +152,16 @@ def create_podcast(
     api_key: str = None,
 ) -> str:
     if not api_key:
-        print("Warning: Using hardcoded API key")
+        logger.warning("ElevenLabs API key not provided")
     try:
         client = ElevenLabs(api_key=api_key)
         try:
             voices = client.voices.get_all()
-            print(f"API connection successful. Found {len(voices)} available voices.")
+            logger.info("ElevenLabs connection OK, {count} voices available", count=len(voices))
         except Exception as voice_error:
-            print(f"Warning: Could not retrieve voices: {voice_error}")
+            logger.warning("Could not retrieve ElevenLabs voices: {e}", e=voice_error)
     except Exception as e:
-        print(f"Fatal Error: Failed to initialize ElevenLabs client: {e}")
+        logger.error("Failed to initialize ElevenLabs client: {e}", e=e)
         return None
     output_path = os.path.abspath(output_path)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -158,13 +175,25 @@ def create_podcast(
         else:
             speaker_id = entry["speaker"]
             entry_text = entry["text"]
-        result = text_to_speech_elevenlabs(
-            client=client,
-            text=entry_text,
-            speaker_id=speaker_id,
-            voice_map=voice_map,
-            model_id=elevenlabs_model,
-        )
+        try:
+            result = text_to_speech_elevenlabs(
+                client=client,
+                text=entry_text,
+                speaker_id=speaker_id,
+                voice_map=voice_map,
+                model_id=elevenlabs_model,
+            )
+        except RemoteException as e:
+            # Circuit breaker is OPEN — ElevenLabs is down.
+            # Abort the whole job immediately; no point generating partial audio.
+            logger.error(
+                "ElevenLabs circuit breaker open, aborting podcast generation "
+                "(entry {i}/{total}): {e}",
+                i=i + 1,
+                total=len(entries) if hasattr(entries, "__len__") else "?",
+                e=e,
+            )
+            return None
         if result:
             segment_audio, segment_rate = result
 

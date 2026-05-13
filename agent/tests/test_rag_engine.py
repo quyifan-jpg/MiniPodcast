@@ -2,7 +2,7 @@
 Unit tests for the multi-channel retrieval engine.
 
 Tests the engine orchestration, post-processors, and channel interface
-without requiring external dependencies (FAISS, OpenAI, MySQL).
+without requiring external dependencies (Milvus, OpenAI, MySQL).
 
 Run:
     cd agent && python -m pytest tests/test_rag_engine.py -v

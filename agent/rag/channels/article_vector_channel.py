@@ -1,8 +1,8 @@
 """
 Article-level vector search channel.
 
-Priority 2 — broader recall than chunk search. Searches the FAISS article
-index using full-article embeddings (title + summary + content combined).
+Priority 2 — broader recall than chunk search. Searches the Milvus
+`article_vectors` collection using full-article embeddings.
 
 Complements ChunkVectorChannel: chunk search is precise (finds specific
 passages), article search casts a wider net (finds thematically related
@@ -12,21 +12,19 @@ articles even if no single passage is a strong match).
 from __future__ import annotations
 
 import asyncio
-import os
 import time
 
-import numpy as np
 from loguru import logger
 
 from rag.channels.base import SearchChannel
 from rag.models import ChannelResult, ChannelType, RetrievedChunk, SearchContext
 
 EMBEDDING_MODEL = "text-embedding-3-small"
-MIN_SIMILARITY = 0.70  # lower than original 0.85 — post-processors will filter
+MIN_SIMILARITY  = 0.35   # IP score threshold; post-processors filter further
 
 
 class ArticleVectorChannel(SearchChannel):
-    """FAISS article-level semantic search."""
+    """Milvus article-level semantic search."""
 
     def __init__(self, *, top_k_multiplier: int = 2, min_similarity: float = MIN_SIMILARITY):
         self._top_k_multiplier = top_k_multiplier
@@ -39,13 +37,13 @@ class ArticleVectorChannel(SearchChannel):
         return 2
 
     def is_enabled(self, context: SearchContext) -> bool:
-        from db.config import get_faiss_db_path
-
-        index_path, mapping_path = get_faiss_db_path()
-        exists = os.path.exists(index_path) and os.path.exists(mapping_path)
-        if not exists:
-            logger.warning("ArticleVectorChannel disabled: FAISS index not found")
-        return exists
+        try:
+            from db.milvus import get_milvus
+            get_milvus()
+            return True
+        except Exception as e:
+            logger.warning("ArticleVectorChannel disabled: Milvus unavailable ({e})", e=e)
+            return False
 
     async def search(self, context: SearchContext) -> ChannelResult:
         return await asyncio.to_thread(self._search_sync, context)
@@ -55,40 +53,48 @@ class ArticleVectorChannel(SearchChannel):
         query = context.effective_query
         top_k = context.top_k * self._top_k_multiplier
 
-        # 1. Generate embedding
+        # 1. Generate query embedding
         query_embedding = self._generate_embedding(query)
         if query_embedding is None:
             return ChannelResult.empty(ChannelType.ARTICLE_VECTOR)
 
-        # 2. Search FAISS
-        from db.config import get_faiss_db_path, get_tracking_db_path
+        # 2. Search Milvus
+        from db.milvus import get_milvus
 
-        index_path, mapping_path = get_faiss_db_path()
-        scored_articles = self._search_faiss(query_embedding, index_path, mapping_path, top_k)
-        if not scored_articles:
+        try:
+            mv   = get_milvus()
+            hits = mv.search_articles(query_embedding, top_k=top_k)
+        except Exception as e:
+            logger.error("Milvus article search failed: {e}", e=e)
             return ChannelResult.empty(ChannelType.ARTICLE_VECTOR)
 
-        # 3. Fetch article details
-        db_path = get_tracking_db_path()
-        article_ids = [aid for aid, _ in scored_articles]
-        sim_map = {aid: sim for aid, sim in scored_articles}
-        articles = self._fetch_articles(db_path, article_ids)
+        # 3. Filter by threshold
+        hits = [h for h in hits if h["score"] >= self._min_similarity]
+        if not hits:
+            return ChannelResult.empty(ChannelType.ARTICLE_VECTOR)
 
-        # 4. Build results
+        # 4. Enrich with MySQL metadata (published_date, source_id, content for longer context)
+        from db.config import get_tracking_db_path
+
+        article_ids = [h["article_id"] for h in hits]
+        article_map = self._fetch_articles(get_tracking_db_path(), article_ids)
+
+        # 5. Build results
         chunks = []
-        for article in articles:
-            aid = article["id"]
-            sim = sim_map.get(aid, 0.0)
+        for h in hits:
+            aid     = h["article_id"]
+            article = article_map.get(aid, {})
+            summary = h.get("summary") or article.get("summary") or (article.get("content", "") or "")[:500]
             chunks.append(RetrievedChunk(
                 id=str(aid),
-                content=article.get("summary") or (article.get("content", "")[:500]),
-                title=article.get("title", "Untitled"),
-                url=article.get("url", ""),
-                score=sim,
+                content=summary,
+                title=h.get("title") or article.get("title", "Untitled"),
+                url=h.get("url") or article.get("url", ""),
+                score=float(h["score"]),
                 source_channel=ChannelType.ARTICLE_VECTOR,
                 metadata={
-                    "published_date": article.get("published_date", ""),
-                    "source_id": str(article.get("source_id", "")),
+                    "published_date": str(article.get("published_date", "")),
+                    "source_id":      str(article.get("source_id", "")),
                 },
             ))
 
@@ -123,39 +129,9 @@ class ArticleVectorChannel(SearchChannel):
             logger.error("Embedding generation failed: {e}", e=e)
             return None
 
-    def _search_faiss(
-        self,
-        query_embedding: list[float],
-        index_path: str,
-        mapping_path: str,
-        top_k: int,
-    ) -> list[tuple[int, float]]:
-        import faiss
-
-        try:
-            index = faiss.read_index(index_path)
-            id_map = np.load(mapping_path).tolist()
-        except Exception as e:
-            logger.error("FAISS load error: {e}", e=e)
-            return []
-
-        query_vec = np.array([query_embedding], dtype=np.float32)
-        distances, indices = index.search(query_vec, top_k)
-
-        results = []
-        for dist, idx in zip(distances[0], indices[0]):
-            if idx < 0 or idx >= len(id_map):
-                continue
-            similarity = float(np.exp(-dist)) if dist > 0 else 1.0
-            if similarity >= self._min_similarity:
-                results.append((id_map[idx], similarity))
-
-        results.sort(key=lambda x: x[1], reverse=True)
-        return results
-
-    def _fetch_articles(self, db_path: str, article_ids: list[int]) -> list[dict]:
+    def _fetch_articles(self, db_path: str, article_ids: list[int]) -> dict[int, dict]:
         if not article_ids:
-            return []
+            return {}
         from db.connection import execute_query
 
         placeholders = ",".join(["%s"] * len(article_ids))
@@ -166,4 +142,4 @@ class ArticleVectorChannel(SearchChannel):
             article_ids,
             fetch=True,
         )
-        return rows or []
+        return {row["id"]: row for row in rows} if rows else {}

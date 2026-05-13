@@ -3,6 +3,7 @@ import time
 import random
 import argparse
 from bs4 import BeautifulSoup
+from loguru import logger
 from openai import OpenAI
 from db.config import get_tracking_db_path
 from db.articles import get_unprocessed_articles, update_article_status
@@ -108,6 +109,34 @@ def analyze_articles(tracking_db_path=None, openai_api_key=None, batch_size=5, d
             print(f"Categories: {categories_display}")
             print(f"Summary: {results['summary'][:100]}..." if len(results["summary"]) > 100 else f"Summary: {results['summary']}")
             stats["success_count"] += 1
+
+            # ── Vector index sync hook ────────────────────────────────
+            # MySQL is now the source of truth: stamp content_hash + flip
+            # embedding_status to pending/stale, then dispatch a Celery
+            # task so the article shows up in Milvus immediately. If
+            # Celery is unreachable, the next periodic index_pending run
+            # picks it up via the same state machine.
+            try:
+                from services.vector_index_service import vector_index_service
+                vector_index_service.mark_for_indexing(
+                    article_id, title, results.get("content", "")
+                )
+            except Exception as e:
+                logger.warning(
+                    "mark_for_indexing failed for article {id}: {e}",
+                    id=article_id, e=str(e),
+                )
+
+            try:
+                from services.celery_tasks_vector import embed_article
+                embed_article.apply_async(args=[article_id], queue="crawl")
+            except Exception as e:
+                # Dev environments without a Celery worker still converge
+                # via the batch processor; log and move on.
+                logger.warning(
+                    "Could not dispatch embed_article for {id}: {e}",
+                    id=article_id, e=str(e),
+                )
         else:
             print(f"Failed to process article ID {article_id}: {error_message}")
             stats["failed_count"] += 1

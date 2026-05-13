@@ -1,25 +1,25 @@
 """
-Chunk-level semantic search tool for the podcast agent.
+Chunk-level semantic search backed by Milvus.
 
-Instead of returning whole articles, this tool returns the most relevant
-*passages* from articles, giving the script agent much richer and more
-targeted context.
+Queries the `chunk_vectors` Milvus collection for the most relevant
+passages, then groups and re-ranks by article.
 """
 
-import os
 import json
-import numpy as np
+
 from agno.agent import Agent
 from openai import OpenAI
-from db.config import get_tracking_db_path, get_chunk_faiss_db_path
+
+from db.config import get_tracking_db_path
 from db.connection import execute_query
+from db.milvus import get_milvus
 from utils.load_api_keys import load_api_key
 
-EMBEDDING_MODEL = "text-embedding-3-small"
-TOP_K = 30               # how many chunks to retrieve from FAISS
-MAX_CHUNKS_PER_ARTICLE = 3  # deduplicate: keep at most N chunks per article
-MIN_SIMILARITY = 0.75    # cosine-sim threshold (lower than article search since chunks are smaller)
-FINAL_TOP_K = 8          # number of articles (with passages) to return to the agent
+EMBEDDING_MODEL      = "text-embedding-3-small"
+TOP_K                = 30    # chunks to retrieve from Milvus
+MAX_CHUNKS_PER_ARTICLE = 3   # keep at most N chunks per article
+MIN_SIMILARITY       = 0.25  # IP score threshold (chunks have lower avg similarity than full articles)
+FINAL_TOP_K          = 8     # articles to return
 
 
 def _generate_query_embedding(query: str) -> list[float] | None:
@@ -35,123 +35,59 @@ def _generate_query_embedding(query: str) -> list[float] | None:
         return None
 
 
-def _search_faiss(query_embedding: list[float], index_path: str,
-                  mapping_path: str, top_k: int) -> list[tuple[int, float]]:
-    """Returns [(chunk_id, similarity), ...] sorted by similarity desc."""
-    import faiss
-
-    if not os.path.exists(index_path) or not os.path.exists(mapping_path):
-        return []
-    try:
-        index = faiss.read_index(index_path)
-        id_map = np.load(mapping_path).tolist()
-    except Exception as e:
-        print(f"chunk_search: FAISS load error: {e}")
-        return []
-
-    query_vec = np.array([query_embedding], dtype=np.float32)
-    distances, indices = index.search(query_vec, top_k)
-
-    results = []
-    for dist, idx in zip(distances[0], indices[0]):
-        if idx < 0 or idx >= len(id_map):
-            continue
-        similarity = float(np.exp(-dist)) if dist > 0 else 1.0
-        if similarity >= MIN_SIMILARITY:
-            results.append((id_map[idx], similarity))
-
-    results.sort(key=lambda x: x[1], reverse=True)
-    return results
-
-
-def _fetch_chunks(db_path: str, chunk_ids: list[int]) -> dict[int, dict]:
-    """Fetch chunk rows by id. Returns {chunk_id: row}."""
-    if not chunk_ids:
-        return {}
-    placeholders = ",".join(["?"] * len(chunk_ids))
-    rows = execute_query(
-        db_path,
-        f"SELECT id, article_id, chunk_index, chunk_text FROM article_chunks WHERE id IN ({placeholders})",
-        chunk_ids,
-        fetch=True,
-    )
-    return {row["id"]: row for row in rows} if rows else {}
-
-
-def _fetch_articles(db_path: str, article_ids: list[int]) -> dict[int, dict]:
-    """Fetch article metadata by id. Returns {article_id: row}."""
+def _get_article_metadata(db_path: str, article_ids: list[int]) -> dict[int, dict]:
+    """Fetch published_date and source_id from MySQL (not stored in Milvus)."""
     if not article_ids:
         return {}
-    placeholders = ",".join(["?"] * len(article_ids))
+    placeholders = ",".join(["%s"] * len(article_ids))
     rows = execute_query(
         db_path,
-        f"""SELECT id, title, url, published_date, source_id
-            FROM crawled_articles WHERE id IN ({placeholders})""",
+        f"SELECT id, published_date, source_id FROM crawled_articles WHERE id IN ({placeholders})",
         article_ids,
         fetch=True,
     )
     return {row["id"]: row for row in rows} if rows else {}
 
 
-def _group_and_rerank(
-    scored_chunks: list[tuple[int, float]],
-    chunk_map: dict[int, dict],
-    article_map: dict[int, dict],
-) -> list[dict]:
-    """
-    Group top chunks by article, deduplicate, assemble passage context.
-    Returns a list of article-level result dicts.
-    """
-    # article_id → [(chunk_row, similarity)]
+def _group_and_rerank(hits: list[dict], meta_map: dict[int, dict]) -> list[dict]:
+    """Group top chunks by article, deduplicate, assemble passage context."""
     by_article: dict[int, list] = {}
-    for chunk_id, sim in scored_chunks:
-        chunk = chunk_map.get(chunk_id)
-        if not chunk:
-            continue
-        aid = chunk["article_id"]
+    for hit in hits:
+        aid = hit["article_id"]
         if aid not in by_article:
             by_article[aid] = []
         if len(by_article[aid]) < MAX_CHUNKS_PER_ARTICLE:
-            by_article[aid].append((chunk, sim))
+            by_article[aid].append(hit)
 
     results = []
-    for article_id, chunk_sims in by_article.items():
-        article = article_map.get(article_id)
-        if not article:
-            continue
-
-        # Sort chunks by their position in the article for readability
-        chunk_sims.sort(key=lambda x: x[0]["chunk_index"])
-
-        # Best similarity score for this article (for final ranking)
-        best_sim = max(s for _, s in chunk_sims)
-
-        # Assemble relevant passages
-        passages = "\n\n---\n\n".join(c["chunk_text"] for c, _ in chunk_sims)
+    for aid, chunk_hits in by_article.items():
+        # Sort by chunk_index for readability
+        chunk_hits.sort(key=lambda h: h["chunk_index"])
+        best_score = max(h["score"] for h in chunk_hits)
+        passages   = "\n\n---\n\n".join(h["chunk_text"] for h in chunk_hits)
+        meta       = meta_map.get(aid, {})
 
         results.append({
-            "id": article_id,
-            "title": article.get("title", "Untitled"),
-            "url": article.get("url", ""),
-            "published_date": article.get("published_date", ""),
-            "source_id": str(article.get("source_id", "")),
-            # Script agent reads full_text; give it the relevant passages only
-            "full_text": passages,
-            "description": passages,
-            "similarity": round(best_sim, 3),
-            "chunks_used": len(chunk_sims),
+            "id":             aid,
+            "title":          chunk_hits[0].get("title", "Untitled"),
+            "url":            chunk_hits[0].get("url", ""),
+            "published_date": str(meta.get("published_date", "")),
+            "source_id":      str(meta.get("source_id", "")),
+            "full_text":      passages,
+            "description":    passages,
+            "similarity":     round(best_score, 3),
+            "chunks_used":    len(chunk_hits),
             "is_scrapping_required": False,
-            "categories": ["chunk-semantic"],
+            "categories":     ["chunk-semantic"],
         })
 
-    # Final ranking: by best similarity score
     results.sort(key=lambda x: x["similarity"], reverse=True)
     return results[:FINAL_TOP_K]
 
 
 def chunk_search(agent: Agent, prompt: str) -> str:
     """
-    Semantic chunk-level search over internal articles.
+    Semantic chunk-level search over internal articles using Milvus.
 
     Retrieves the most relevant *passages* (not whole articles) from the
     knowledge base using vector similarity, then returns them grouped by
@@ -164,38 +100,44 @@ def chunk_search(agent: Agent, prompt: str) -> str:
     Returns:
         JSON string with top articles and their most relevant passages.
     """
-    print(f"chunk_search: query='{prompt}'")
-
-    db_path = get_tracking_db_path()
-    index_path, mapping_path = get_chunk_faiss_db_path()
-
-    if not os.path.exists(index_path):
-        return (
-            "Chunk index not available yet. "
-            "Run `python -m processors.chunk_processor` first, "
-            "then retry."
-        )
+    print(f"\n[chunk_search] ① query: '{prompt}'")
 
     query_embedding = _generate_query_embedding(prompt)
     if query_embedding is None:
         return "Chunk search unavailable: could not generate query embedding."
 
-    scored_chunks = _search_faiss(query_embedding, index_path, mapping_path, TOP_K)
-    if not scored_chunks:
+    try:
+        mv   = get_milvus()
+        hits = mv.search_chunks(query_embedding, top_k=TOP_K)
+    except Exception as e:
+        return f"Chunk search unavailable: {e}. Continuing with other search methods."
+
+    print(f"[chunk_search] ② Milvus returned {len(hits)} chunks")
+
+    # Filter by similarity threshold
+    hits = [h for h in hits if h["score"] >= MIN_SIMILARITY]
+    if not hits:
         return "No relevant passages found (similarity threshold not met). Try rephrasing the query."
 
-    chunk_ids = [cid for cid, _ in scored_chunks]
-    chunk_map = _fetch_chunks(db_path, chunk_ids)
-    article_ids = list({c["article_id"] for c in chunk_map.values()})
-    article_map = _fetch_articles(db_path, article_ids)
+    print(f"[chunk_search] ③ After threshold filter: {len(hits)} chunks")
+    for h in hits[:5]:
+        print(f"  chunk_id={h['chunk_id']} article_id={h['article_id']} score={h['score']:.3f}")
 
-    results = _group_and_rerank(scored_chunks, chunk_map, article_map)
+    # Enrich with MySQL metadata (published_date, source_id)
+    article_ids = list({h["article_id"] for h in hits})
+    db_path     = get_tracking_db_path()
+    meta_map    = _get_article_metadata(db_path, article_ids)
+
+    results = _group_and_rerank(hits, meta_map)
+    print(f"[chunk_search] ④ Returning {len(results)} articles")
+    for r in results:
+        print(f"  [{r['similarity']}] {r['title'][:60]} (chunks={r['chunks_used']})")
 
     if not results:
         return "No articles matched after deduplication."
 
     summary = (
-        f"Found {len(results)} articles via chunk-level semantic search. "
-        f"Each result contains only the most relevant passages (up to {MAX_CHUNKS_PER_ARTICLE} per article).\n\n"
+        f"Found {len(results)} articles via chunk-level semantic search "
+        f"(up to {MAX_CHUNKS_PER_ARTICLE} passages per article).\n\n"
     )
     return summary + json.dumps(results, indent=2, ensure_ascii=False)

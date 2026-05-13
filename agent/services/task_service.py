@@ -262,10 +262,10 @@ class TaskService:
                 last_run IS NULL 
                 OR 
                 CASE frequency_unit
-                    WHEN 'minutes' THEN datetime(last_run, '+' || frequency || ' minutes') <= datetime('now', 'localtime')
-                    WHEN 'hours' THEN datetime(last_run, '+' || frequency || ' hours') <= datetime('now', 'localtime')
-                    WHEN 'days' THEN datetime(last_run, '+' || frequency || ' days') <= datetime('now', 'localtime')
-                    ELSE datetime(last_run, '+' || frequency || ' seconds') <= datetime('now', 'localtime')
+                    WHEN 'minutes' THEN DATE_ADD(last_run, INTERVAL frequency MINUTE) <= NOW()
+                    WHEN 'hours'   THEN DATE_ADD(last_run, INTERVAL frequency HOUR)   <= NOW()
+                    WHEN 'days'    THEN DATE_ADD(last_run, INTERVAL frequency DAY)    <= NOW()
+                    ELSE                DATE_ADD(last_run, INTERVAL frequency SECOND)  <= NOW()
                 END
             )
             ORDER BY last_run
@@ -298,8 +298,8 @@ class TaskService:
                 COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0) as successful_executions,
                 COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed_executions,
                 COALESCE(SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END), 0) as running_executions,
-                COALESCE(AVG(CASE WHEN end_time IS NOT NULL 
-                    THEN (julianday(end_time) - julianday(start_time)) * 86400.0 
+                COALESCE(AVG(CASE WHEN end_time IS NOT NULL
+                    THEN TIMESTAMPDIFF(SECOND, start_time, end_time)
                     ELSE NULL END), 0) as avg_execution_time_seconds
             FROM task_executions
             WHERE start_time >= ?

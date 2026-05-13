@@ -111,8 +111,9 @@ def podcast_script_agent_run(
     if not content_texts:
         return "No confirmed sources found to generate podcast script."
 
+    from services.model_router import router
     podcast_script_agent = Agent(
-        model=OpenAIChat(id="gpt-4o-mini"),
+        model=router.get_agno_model(),
         instructions=PODCAST_AGENT_INSTRUCTIONS,
         description=PODCAST_AGENT_DESCRIPTION,
         use_json_mode=True,
