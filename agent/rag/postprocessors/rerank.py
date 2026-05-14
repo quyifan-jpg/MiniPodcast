@@ -58,6 +58,11 @@ class RerankProcessor(PostProcessor):
         if not self._api_key:
             logger.debug("RerankProcessor disabled: no API key configured")
             return False
+        logger.info(
+            "RerankProcessor ACTIVE  provider={p}  model={m}",
+            p=self._provider,
+            m=self._model,
+        )
         return True
 
     def process(
@@ -159,15 +164,25 @@ class RerankProcessor(PostProcessor):
         for item in data.get("results", []):
             idx = item["index"]
             chunk = chunks[idx]
+            old_score = chunk.score
             chunk.score = item["relevance_score"]
+            logger.debug(
+                "  rerank [{i}] {title:.30s}  {old:.3f} → {new:.3f}",
+                i=idx,
+                title=chunk.title or chunk.id,
+                old=old_score,
+                new=chunk.score,
+            )
             reranked.append(chunk)
 
-        # Sort by score descending
         reranked.sort(key=lambda c: c.score, reverse=True)
 
         logger.info(
-            "Jina rerank: {input} → {output} chunks",
+            "Jina rerank: {input} → {output} chunks  "
+            "top_score={top:.3f}  bottom_score={bot:.3f}",
             input=len(chunks),
             output=len(reranked),
+            top=reranked[0].score if reranked else 0,
+            bot=reranked[-1].score if reranked else 0,
         )
         return reranked
