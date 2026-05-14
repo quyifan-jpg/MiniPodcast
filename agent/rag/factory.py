@@ -107,11 +107,19 @@ def _build_postprocessors():
             model=rag_settings.rerank_model,
         ))
 
+    if rag_settings.freshness_enabled:
+        from rag.postprocessors.freshness import FreshnessBoostProcessor
+        processors.append(FreshnessBoostProcessor(
+            half_life_days=rag_settings.freshness_half_life_days,
+            floor_multiplier=rag_settings.freshness_floor_multiplier,
+        ))
+
     if rag_settings.quality_filter_enabled:
         processors.append(QualityFilterProcessor(
             min_score=rag_settings.quality_min_score,
             min_content_length=rag_settings.quality_min_length,
             keep_best_when_all_filtered=rag_settings.quality_keep_best,
+            max_age_days=rag_settings.quality_max_age_days,
         ))
 
     return processors

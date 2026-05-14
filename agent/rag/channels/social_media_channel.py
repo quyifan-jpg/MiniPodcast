@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from loguru import logger
 
 from rag.channels.base import SearchChannel
-from rag.models import ChannelResult, ChannelType, RetrievedChunk, SearchContext
+from rag.models import ChannelResult, ChannelType, MetadataKey, RetrievedChunk, SearchContext
 
 
 class SocialMediaChannel(SearchChannel):
@@ -104,9 +104,9 @@ class SocialMediaChannel(SearchChannel):
                 score=score,
                 source_channel=ChannelType.SOCIAL_MEDIA,
                 metadata={
-                    "published_date": row.get("post_timestamp", ""),
-                    "platform": platform,
-                    "engagement": engagement,
+                    MetadataKey.PUBLISHED_DATE: row.get("post_timestamp", ""),
+                    MetadataKey.PLATFORM:       platform,
+                    MetadataKey.ENGAGEMENT:     engagement,
                 },
             ))
 

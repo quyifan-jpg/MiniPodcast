@@ -19,7 +19,7 @@ import numpy as np
 from loguru import logger
 
 from rag.channels.base import SearchChannel
-from rag.models import ChannelResult, ChannelType, RetrievedChunk, SearchContext
+from rag.models import ChannelResult, ChannelType, MetadataKey, RetrievedChunk, SearchContext
 
 
 # ── Defaults ──────────────────────────────────────────────────────────
@@ -221,9 +221,9 @@ class ChunkVectorChannel(SearchChannel):
                 score=best_sim,
                 source_channel=ChannelType.CHUNK_VECTOR,
                 metadata={
-                    "published_date": article.get("published_date", ""),
-                    "source_id": str(article.get("source_id", "")),
-                    "chunks_used": len(chunk_sims),
+                    MetadataKey.PUBLISHED_DATE: article.get("published_date", ""),
+                    MetadataKey.SOURCE_ID:      str(article.get("source_id", "")),
+                    MetadataKey.CHUNKS_USED:    len(chunk_sims),
                 },
             ))
 

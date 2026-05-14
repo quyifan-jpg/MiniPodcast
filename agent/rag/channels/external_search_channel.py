@@ -17,7 +17,7 @@ from typing import Optional
 from loguru import logger
 
 from rag.channels.base import SearchChannel
-from rag.models import ChannelResult, ChannelType, RetrievedChunk, SearchContext
+from rag.models import ChannelResult, ChannelType, MetadataKey, RetrievedChunk, SearchContext
 
 
 class ExternalSearchChannel(SearchChannel):
@@ -125,9 +125,9 @@ class ExternalSearchChannel(SearchChannel):
                 score=score,
                 source_channel=ChannelType.EXTERNAL,
                 metadata={
-                    "published_date": published,
-                    "source_engine": "google_news",
-                    "is_scrapping_required": True,
+                    MetadataKey.PUBLISHED_DATE:      published,
+                    MetadataKey.SOURCE_ENGINE:       "google_news",
+                    MetadataKey.IS_SCRAPING_REQUIRED: True,
                 },
             ))
 
@@ -162,8 +162,8 @@ class ExternalSearchChannel(SearchChannel):
                 score=score,
                 source_channel=ChannelType.EXTERNAL,
                 metadata={
-                    "source_engine": "duckduckgo",
-                    "is_scrapping_required": True,
+                    MetadataKey.SOURCE_ENGINE:       "duckduckgo",
+                    MetadataKey.IS_SCRAPING_REQUIRED: True,
                 },
             ))
 

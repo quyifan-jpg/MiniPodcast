@@ -65,11 +65,26 @@ class RAGSettings(BaseSettings):
     rerank_api_key: Optional[str] = Field(default=None, description="Rerank provider API key")
     rerank_model: str = Field(default="rerank-v3.5", description="Rerank model name")
 
+    # ── Post-Processor: Freshness Boost ──────────────────────────────
+    freshness_enabled: bool = True
+    freshness_half_life_days: float = Field(
+        default=30.0,
+        description="Days until freshness multiplier halves (lower = stronger recency bias)",
+    )
+    freshness_floor_multiplier: float = Field(
+        default=0.05,
+        description="Minimum score multiplier for very old content (0–1)",
+    )
+
     # ── Post-Processor: Quality Filter ────────────────────────────────
     quality_filter_enabled: bool = True
     quality_min_score: float = Field(default=0.3, description="Min score to keep")
     quality_min_length: int = Field(default=10, description="Min content length (chars)")
     quality_keep_best: bool = Field(default=True, description="Keep best chunk if all filtered")
+    quality_max_age_days: Optional[float] = Field(
+        default=None,
+        description="Drop chunks older than this many days (None = no hard cutoff)",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="RAG_",

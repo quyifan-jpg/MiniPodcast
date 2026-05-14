@@ -11,6 +11,27 @@ from enum import Enum
 from typing import Any, Optional
 
 
+class MetadataKey:
+    """
+    Standard keys for RetrievedChunk.metadata.
+
+    All channels MUST use these constants instead of raw strings so that
+    post-processors (FreshnessBoost, QualityFilter) can reliably read them.
+    """
+
+    # ── Content provenance ────────────────────────────────────────────
+    PUBLISHED_DATE = "published_date"   # ISO-8601 str or datetime; set by all channels
+    SOURCE_ID      = "source_id"        # internal source table ID (str)
+    SOURCE_ENGINE  = "source_engine"    # external engine name, e.g. "google_news"
+    PLATFORM       = "platform"         # social platform, e.g. "twitter"
+
+    # ── Retrieval diagnostics ─────────────────────────────────────────
+    MATCH_TYPE           = "match_type"           # "title" | "content" (keyword channel)
+    CHUNKS_USED          = "chunks_used"           # int, chunk_vector only
+    ENGAGEMENT           = "engagement"            # int, social_media only
+    IS_SCRAPING_REQUIRED = "is_scraping_required"  # bool, external channel
+
+
 class ChannelType(str, Enum):
     """
     Identifies which channel produced a result.

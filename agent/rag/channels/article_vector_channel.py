@@ -19,7 +19,7 @@ import numpy as np
 from loguru import logger
 
 from rag.channels.base import SearchChannel
-from rag.models import ChannelResult, ChannelType, RetrievedChunk, SearchContext
+from rag.models import ChannelResult, ChannelType, MetadataKey, RetrievedChunk, SearchContext
 
 EMBEDDING_MODEL = "text-embedding-3-small"
 MIN_SIMILARITY = 0.70  # lower than original 0.85 — post-processors will filter
@@ -87,8 +87,8 @@ class ArticleVectorChannel(SearchChannel):
                 score=sim,
                 source_channel=ChannelType.ARTICLE_VECTOR,
                 metadata={
-                    "published_date": article.get("published_date", ""),
-                    "source_id": str(article.get("source_id", "")),
+                    MetadataKey.PUBLISHED_DATE: article.get("published_date", ""),
+                    MetadataKey.SOURCE_ID:      str(article.get("source_id", "")),
                 },
             ))
 

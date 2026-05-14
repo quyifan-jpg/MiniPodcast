@@ -95,7 +95,12 @@ class RerankProcessor(PostProcessor):
         import cohere
 
         client = cohere.ClientV2(api_key=self._api_key)
-        documents = [c.content for c in chunks]
+        # Pass title alongside content so the cross-encoder sees the article
+        # heading — titles often contain the clearest topical signal.
+        documents = [
+            {"text": c.content, "title": c.title} if c.title else c.content
+            for c in chunks
+        ]
 
         response = client.rerank(
             query=query,
@@ -127,7 +132,11 @@ class RerankProcessor(PostProcessor):
     ) -> list[RetrievedChunk]:
         import requests
 
-        documents = [c.content for c in chunks]
+        # Pass title alongside content — Jina supports {"text", "title"} dicts.
+        documents = [
+            {"text": c.content, "title": c.title} if c.title else c.content
+            for c in chunks
+        ]
 
         response = requests.post(
             "https://api.jina.ai/v1/rerank",
