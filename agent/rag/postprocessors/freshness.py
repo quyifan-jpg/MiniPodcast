@@ -76,7 +76,7 @@ class FreshnessBoostProcessor(PostProcessor):
     ):
         if half_life_days <= 0:
             raise ValueError("half_life_days must be positive")
-        self._lambda = math.log(2) / half_life_days   # decay constant
+        self._lambda = math.log(2) / half_life_days  # decay constant
         self._floor = max(0.0, min(floor_multiplier, 1.0))
         self._enabled_flag = enabled
 
@@ -116,8 +116,7 @@ class FreshnessBoostProcessor(PostProcessor):
             boosted += 1
 
         logger.debug(
-            "FreshnessBoost: adjusted {b}/{t} chunks "
-            "({s} had no date, half_life={hl}d)",
+            "FreshnessBoost: adjusted {b}/{t} chunks ({s} had no date, half_life={hl}d)",
             b=boosted,
             t=len(chunks),
             s=skipped_no_date,

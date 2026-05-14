@@ -11,7 +11,6 @@ uses async LLM compression with token budgeting.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -99,10 +98,12 @@ def summarize_conversation(
                 max_words=max_words,
             )
 
-        response = llm.invoke([
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg},
-        ])
+        response = llm.invoke(
+            [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ]
+        )
 
         summary = response.content.strip()
         logger.info(
@@ -149,31 +150,35 @@ def extract_preferences(
         existing_str = ""
         if existing_preferences:
             import json
+
             existing_str = f"\nExisting preferences:\n{json.dumps(existing_preferences, indent=2, ensure_ascii=False)}\n"
 
-        response = llm.invoke([
-            {
-                "role": "system",
-                "content": (
-                    "You extract user preferences from podcast assistant conversations.\n"
-                    "Return a JSON object with these optional keys:\n"
-                    '  "preferred_language": string (language name),\n'
-                    '  "topics_of_interest": [string] (topics they care about),\n'
-                    '  "style_preferences": [string] (casual/formal/detailed/concise),\n'
-                    '  "other_notes": string (anything else relevant)\n\n'
-                    "If a preference was already known (see existing preferences) and "
-                    "hasn't changed, keep it. If no preferences are detectable, "
-                    "return the existing preferences unchanged.\n"
-                    "Return ONLY valid JSON, no explanation."
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"{existing_str}\nConversation:\n{formatted}",
-            },
-        ])
+        response = llm.invoke(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "You extract user preferences from podcast assistant conversations.\n"
+                        "Return a JSON object with these optional keys:\n"
+                        '  "preferred_language": string (language name),\n'
+                        '  "topics_of_interest": [string] (topics they care about),\n'
+                        '  "style_preferences": [string] (casual/formal/detailed/concise),\n'
+                        '  "other_notes": string (anything else relevant)\n\n'
+                        "If a preference was already known (see existing preferences) and "
+                        "hasn't changed, keep it. If no preferences are detectable, "
+                        "return the existing preferences unchanged.\n"
+                        "Return ONLY valid JSON, no explanation."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"{existing_str}\nConversation:\n{formatted}",
+                },
+            ]
+        )
 
         import json
+
         try:
             prefs = json.loads(response.content.strip())
             if not isinstance(prefs, dict):
@@ -194,6 +199,7 @@ def extract_preferences(
 
 
 # ── Private helpers ──────────────────────────────────────────────────
+
 
 def _format_messages(messages: List[Dict[str, Any]]) -> str:
     """Format message list into readable conversation text."""

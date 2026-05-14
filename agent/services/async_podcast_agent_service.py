@@ -29,7 +29,7 @@ class PodcastAgentService:
         self.redis_db = int(os.environ.get("REDIS_DB", 0))
         self.redis_username = os.environ.get("REDIS_USERNAME", None)
         self.redis_password = os.environ.get("REDIS_PASSWORD", None)
-        
+
         # Build Redis connection URL with authentication if provided
         if self.redis_username and self.redis_password:
             redis_url = f"redis://{self.redis_username}:{self.redis_password}@{self.redis_host}:{self.redis_port}/{self.redis_db + 1}"
@@ -37,7 +37,7 @@ class PodcastAgentService:
             redis_url = f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/{self.redis_db + 1}"
         else:
             redis_url = f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db + 1}"
-        
+
         self.redis_pool = ConnectionPool.from_url(redis_url, max_connections=10)
         self.redis = Redis(connection_pool=self.redis_pool)
         self.using_mysql = os.environ.get("DATABASE_URL", "").startswith(("mysql://", "mysql+pymysql://"))
@@ -149,9 +149,11 @@ class PodcastAgentService:
             webm_files = glob.glob(os.path.join(recordings_dir, "*.webm"))
             if webm_files:
                 browser_recording_path = webm_files[0]
-                if (os.path.exists(browser_recording_path) and 
-                    os.path.getsize(browser_recording_path) > 8192 and 
-                    os.access(browser_recording_path, os.R_OK)):
+                if (
+                    os.path.exists(browser_recording_path)
+                    and os.path.getsize(browser_recording_path) > 8192
+                    and os.access(browser_recording_path, os.R_OK)
+                ):
                     return browser_recording_path
             return None
         except Exception as _:
@@ -318,8 +320,12 @@ class PodcastAgentService:
     async def delete_session(self, session_id: str):
         try:
             await async_redis_cache.delete(self._status_cache_key(session_id))
-            row = {"session_data": "{}"} if self.using_mysql else await self._fetchone(
-                get_agent_session_db_path(), "SELECT session_data FROM podcast_sessions WHERE session_id = ?", (session_id,)
+            row = (
+                {"session_data": "{}"}
+                if self.using_mysql
+                else await self._fetchone(
+                    get_agent_session_db_path(), "SELECT session_data FROM podcast_sessions WHERE session_id = ?", (session_id,)
+                )
             )
             if not row and not self.using_mysql:
                 return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": f"Session with ID {session_id} not found"})

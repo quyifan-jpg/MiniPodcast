@@ -17,10 +17,10 @@ from textwrap import dedent
 from typing import List, Optional
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from langchain_core.tools import tool
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
@@ -355,6 +355,7 @@ def search_agent_react_run(agent, query: str) -> str:
 # CLI test
 # ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
+
     class _FakeAgent:
         session_id = "test_react_session"
 

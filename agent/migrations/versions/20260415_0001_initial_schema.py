@@ -49,16 +49,12 @@ def upgrade() -> None:
     for table in ["crawled_articles", "sources", "podcasts", "tasks"]:
         if not _column_exists(table, "deleted_at"):
             op.execute(
-                f"ALTER TABLE `{table}` "
-                f"ADD COLUMN `deleted_at` TIMESTAMP NULL DEFAULT NULL "
-                f"COMMENT 'Soft delete timestamp. NULL = active record.'"
+                f"ALTER TABLE `{table}` ADD COLUMN `deleted_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'Soft delete timestamp. NULL = active record.'"
             )
 
         index_name = f"idx_{table}_deleted_at"
         if not _index_exists(table, index_name):
-            op.execute(
-                f"CREATE INDEX `{index_name}` ON `{table}` (`deleted_at`)"
-            )
+            op.execute(f"CREATE INDEX `{index_name}` ON `{table}` (`deleted_at`)")
 
 
 def downgrade() -> None:

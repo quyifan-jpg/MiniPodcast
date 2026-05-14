@@ -55,8 +55,8 @@ class RAGSettings(BaseSettings):
     rrf_k: int = Field(
         default=60,
         description="RRF smoothing parameter (Cormack et al. 2009). "
-                    "Higher → more weight on multi-channel presence. "
-                    "Lower → more weight on single-channel rank.",
+        "Higher → more weight on multi-channel presence. "
+        "Lower → more weight on single-channel rank.",
     )
 
     # ── Post-Processor: Rerank ────────────────────────────────────────

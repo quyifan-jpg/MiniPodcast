@@ -105,6 +105,7 @@ class ApiResponse(BaseModel, Generic[T]):
 
 # ── Convenience type aliases ───────────────────────────────────────────────────
 
+
 def success_response(data: Any = None, message: str = "success") -> JSONResponse:
     return ApiResponse.ok(data=data, message=message).to_json_response(200)
 

@@ -37,7 +37,7 @@ import functools
 import threading
 import time
 from enum import Enum
-from typing import Callable, Optional, Type
+from typing import Callable, Type
 
 from loguru import logger
 
@@ -143,13 +143,13 @@ class CircuitBreaker:
     def __call__(self, func: Callable) -> Callable:
         """Use as decorator: @breaker or @breaker()"""
         if asyncio.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args, **kwargs):
                 if not self._can_attempt():
                     raise RemoteException(
                         upstream=self.name,
-                        message=f"Circuit breaker OPEN for '{self.name}'. "
-                                f"Failing fast to protect upstream service.",
+                        message=f"Circuit breaker OPEN for '{self.name}'. Failing fast to protect upstream service.",
                         code=503,
                     )
                 try:
@@ -165,8 +165,10 @@ class CircuitBreaker:
                         upstream=self.name,
                         message=str(e),
                     ) from e
+
             return async_wrapper
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args, **kwargs):
                 if not self._can_attempt():
@@ -188,6 +190,7 @@ class CircuitBreaker:
                         upstream=self.name,
                         message=str(e),
                     ) from e
+
             return sync_wrapper
 
     async def __aenter__(self):
@@ -207,10 +210,7 @@ class CircuitBreaker:
         return False  # don't suppress the exception
 
     def __repr__(self) -> str:
-        return (
-            f"CircuitBreaker(name={self.name!r}, state={self._state.value}, "
-            f"failures={self._failure_count}/{self.failure_threshold})"
-        )
+        return f"CircuitBreaker(name={self.name!r}, state={self._state.value}, failures={self._failure_count}/{self.failure_threshold})"
 
 
 # ── Pre-built breakers for common upstreams ────────────────────────────────────

@@ -26,6 +26,7 @@ from routers.auth_router import _hash_password, _verify_password
 
 # ── Password hashing ──────────────────────────────────────────────────────────
 
+
 class TestPasswordHashing:
     def test_hash_is_not_plain(self):
         h = _hash_password("mysecret")
@@ -46,6 +47,7 @@ class TestPasswordHashing:
 
 # ── JWT round-trip ─────────────────────────────────────────────────────────────
 
+
 class TestJWT:
     def test_create_and_decode(self):
         from middleware.auth import create_access_token
@@ -56,6 +58,7 @@ class TestJWT:
             token = create_access_token("42")
 
         import jwt
+
         payload = jwt.decode(token, "test-secret", algorithms=["HS256"])
         assert payload["sub"] == "42"
         assert "exp" in payload
@@ -69,11 +72,13 @@ class TestJWT:
             token = create_access_token("99")
 
         import jwt
+
         payload = jwt.decode(token, "test-secret", algorithms=["HS256"])
         assert payload["exp"] > time.time()
 
 
 # ── Register endpoint ─────────────────────────────────────────────────────────
+
 
 class TestRegister:
     def _call(self, email, username, password, db_mock):
@@ -88,13 +93,14 @@ class TestRegister:
 
     def _fresh_db(self):
         db = MagicMock()
-        db.get_user_by_email.return_value = None      # email not taken
-        db.get_user_by_username.return_value = None   # username not taken
-        db.create_user.return_value = 1               # new user id
+        db.get_user_by_email.return_value = None  # email not taken
+        db.get_user_by_username.return_value = None  # username not taken
+        db.create_user.return_value = 1  # new user id
         return db
 
     def test_happy_path_returns_token(self):
         from core.config import settings
+
         with patch.object(settings, "jwt_secret_key", "secret"):
             result = self._call("new@example.com", "newuser", "password123", self._fresh_db())
         assert result.access_token
@@ -102,8 +108,9 @@ class TestRegister:
 
     def test_duplicate_email_raises_409(self):
         from fastapi import HTTPException
+
         db = self._fresh_db()
-        db.get_user_by_email.return_value = {"id": 1}   # email already exists
+        db.get_user_by_email.return_value = {"id": 1}  # email already exists
 
         with pytest.raises(HTTPException) as exc:
             self._call("taken@example.com", "other", "password123", db)
@@ -112,6 +119,7 @@ class TestRegister:
 
     def test_duplicate_username_raises_409(self):
         from fastapi import HTTPException
+
         db = self._fresh_db()
         db.get_user_by_username.return_value = {"id": 2}
 
@@ -136,11 +144,13 @@ class TestRegister:
 
     def test_username_normalized_to_lowercase(self):
         from models.user_schemas import RegisterRequest
+
         req = RegisterRequest(email="a@b.com", username="MyUser", password="password123")
         assert req.username == "myuser"
 
 
 # ── Login endpoint ─────────────────────────────────────────────────────────────
+
 
 class TestLogin:
     def _stored_user(self, password: str, is_active: bool = True) -> dict:
@@ -164,12 +174,14 @@ class TestLogin:
         db = MagicMock()
         db.get_user_by_email.return_value = self._stored_user("correctpass")
         from core.config import settings
+
         with patch.object(settings, "jwt_secret_key", "secret"):
             result = self._call("user@example.com", "correctpass", db)
         assert result.access_token
 
     def test_wrong_password_raises_401(self):
         from fastapi import HTTPException
+
         db = MagicMock()
         db.get_user_by_email.return_value = self._stored_user("correctpass")
 
@@ -179,6 +191,7 @@ class TestLogin:
 
     def test_unknown_email_raises_401(self):
         from fastapi import HTTPException
+
         db = MagicMock()
         db.get_user_by_email.return_value = None
 
@@ -188,6 +201,7 @@ class TestLogin:
 
     def test_inactive_account_raises_403(self):
         from fastapi import HTTPException
+
         db = MagicMock()
         db.get_user_by_email.return_value = self._stored_user("pass", is_active=False)
 
@@ -198,6 +212,7 @@ class TestLogin:
 
 # ── /me endpoint ──────────────────────────────────────────────────────────────
 
+
 class TestMe:
     def test_returns_user_profile(self):
         from routers.auth_router import me
@@ -206,8 +221,11 @@ class TestMe:
 
         db = MagicMock()
         db.get_user_by_id.return_value = {
-            "id": 7, "email": "u@example.com", "username": "user7",
-            "is_active": True, "created_at": datetime.now(),
+            "id": 7,
+            "email": "u@example.com",
+            "username": "user7",
+            "is_active": True,
+            "created_at": datetime.now(),
         }
         with patch("routers.auth_router.users_db", db):
             result = asyncio.run(me(user_id="7"))
@@ -228,6 +246,7 @@ class TestMe:
 
 # ── Middleware ─────────────────────────────────────────────────────────────────
 
+
 class TestAuthMiddleware:
     def _make_request(self, path: str, token: str | None = None):
         req = MagicMock()
@@ -242,23 +261,27 @@ class TestAuthMiddleware:
 
     def test_public_path_no_token_passes(self):
         from middleware.auth import _PUBLIC_PATHS
+
         assert "/api/auth/register" in _PUBLIC_PATHS
         assert "/api/auth/login" in _PUBLIC_PATHS
         assert "/health" in _PUBLIC_PATHS
 
     def test_protected_prefix_configured(self):
         from middleware.auth import _PROTECTED_PREFIXES
+
         assert "/api/podcast-agent" in _PROTECTED_PREFIXES
         assert "/api/auth/me" in _PROTECTED_PREFIXES
 
     def test_extract_token_from_header(self):
         from middleware.auth import _extract_token
+
         req = MagicMock()
         req.headers = {"Authorization": "Bearer mytoken123"}
         assert _extract_token(req) == "mytoken123"
 
     def test_extract_token_missing_returns_none(self):
         from middleware.auth import _extract_token
+
         req = MagicMock()
         req.headers = {}
         assert _extract_token(req) is None
@@ -266,6 +289,7 @@ class TestAuthMiddleware:
     def test_verify_valid_jwt(self):
         from middleware.auth import _verify_jwt, create_access_token
         from core.config import settings
+
         with patch.object(settings, "jwt_secret_key", "secret"):
             token = create_access_token("user1")
             payload = _verify_jwt(token)
@@ -277,10 +301,7 @@ class TestAuthMiddleware:
         from middleware.auth import _verify_jwt
         from core.config import settings
 
-        expired_token = pyjwt.encode(
-            {"sub": "1", "exp": int(time.time()) - 60, "iat": int(time.time()) - 120},
-            "secret", algorithm="HS256"
-        )
+        expired_token = pyjwt.encode({"sub": "1", "exp": int(time.time()) - 60, "iat": int(time.time()) - 120}, "secret", algorithm="HS256")
         with patch.object(settings, "jwt_secret_key", "secret"):
             result = _verify_jwt(expired_token)
         assert result is None
@@ -288,6 +309,7 @@ class TestAuthMiddleware:
     def test_verify_tampered_jwt_returns_none(self):
         from middleware.auth import _verify_jwt
         from core.config import settings
+
         with patch.object(settings, "jwt_secret_key", "secret"):
             result = _verify_jwt("not.a.valid.jwt")
         assert result is None

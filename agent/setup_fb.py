@@ -1,4 +1,3 @@
-
 import sys
 import os
 
@@ -6,7 +5,7 @@ import os
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
 
-from tools.social.browser import setup_session
+from tools.social.browser import setup_session  # noqa: E402
 
 if __name__ == "__main__":
     print("Starting Facebook session setup...")

@@ -66,6 +66,7 @@ def set_user_id(uid: str) -> None:
 
 # ── Context injection filter ───────────────────────────────────────────────────
 
+
 def _inject_context(record: dict) -> bool:
     """
     Loguru filter that injects request-scoped context variables into every
@@ -94,6 +95,7 @@ _DEV_FORMAT = (
 
 
 # ── Public setup function ──────────────────────────────────────────────────────
+
 
 def setup_logging(app_env: str = "production", log_level: Optional[str] = None) -> None:
     """
@@ -126,9 +128,9 @@ def setup_logging(app_env: str = "production", log_level: Optional[str] = None) 
         logger.add(
             sys.stderr,
             level=level,
-            serialize=True,          # emit JSON lines
+            serialize=True,  # emit JSON lines
             filter=_inject_context,
-            backtrace=False,         # avoid leaking internals in prod
+            backtrace=False,  # avoid leaking internals in prod
             diagnose=False,
         )
 

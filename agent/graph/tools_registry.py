@@ -34,6 +34,7 @@ class _AgentShim:
     Minimal shim that satisfies `agent.session_id` for existing tools.
     No other Agent methods are used by the search/scrape tools.
     """
+
     def __init__(self, session_id: str) -> None:
         self.session_id = session_id
 
@@ -78,6 +79,7 @@ def make_search_tools(session_id: str) -> list:
     def search_duckduckgo(query: str) -> str:
         """Search the web using DuckDuckGo for general information about a topic."""
         from duckduckgo_search import DDGS
+
         try:
             with DDGS() as ddgs:
                 raw = list(ddgs.text(query, max_results=8))
@@ -92,7 +94,8 @@ def make_search_tools(session_id: str) -> list:
                     "published_date": "",
                     "is_scrapping_required": True,
                 }
-                for r in raw if r.get("href")
+                for r in raw
+                if r.get("href")
             ]
             return f"is_scrapping_required: True, results: {json.dumps(normalized)}"
         except Exception as exc:
@@ -141,7 +144,7 @@ def make_search_tools(session_id: str) -> list:
         return run_browser_search(shim, instruction)
 
     return [
-        search_chunks,           # always first per instructions
+        search_chunks,  # always first per instructions
         search_embeddings,
         search_google_news,
         search_duckduckgo,
@@ -150,5 +153,5 @@ def make_search_tools(session_id: str) -> list:
         search_social_media_posts,
         get_social_media_trending,
         search_articles_db,
-        search_with_browser,     # always last (expensive)
+        search_with_browser,  # always last (expensive)
     ]

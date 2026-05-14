@@ -188,7 +188,6 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     print("INFO: Starting task scheduler")
-    tasks_db_path = get_tasks_db_path()
     cleanup_stuck_tasks()
     database_url = os.environ.get("DATABASE_URL", "")
     jobstores = {"default": SQLAlchemyJobStore(url=database_url)}

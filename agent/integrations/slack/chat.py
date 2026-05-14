@@ -93,7 +93,7 @@ def get_session_state(session_id: str):
     if result and result.get("state_data"):
         try:
             return json.loads(result["state_data"])
-        except:
+        except Exception:
             return {}
     return {}
 
@@ -510,7 +510,7 @@ async def send_audio_confirmation_blocks(thread_key: str, state_data: dict, resp
         }
     )
     blocks.append({"type": "actions", "elements": action_elements})
-    await send_slack_blocks(thread_key, blocks, f"🎵 Audio Review")
+    await send_slack_blocks(thread_key, blocks, "🎵 Audio Review")
 
 
 async def send_final_presentation_blocks(thread_key: str, state_data: dict, response_text: str):
@@ -709,7 +709,6 @@ def handle_confirm_sources(ack, body, client):
     def process_confirmation():
         try:
             thread_key = body["actions"][0]["value"]
-            user_id = body["user"]["id"]
             selected_sources = []
             selected_language = "en"
             if "state" in body and "values" in body["state"]:
@@ -1017,7 +1016,6 @@ def handle_new_podcast(ack, body, client):
 
     def start_new():
         try:
-            old_thread_key = body["actions"][0]["value"]
             channel_id = body["channel"]["id"]
             user_id = body["user"]["id"]
             import time

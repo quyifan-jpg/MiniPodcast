@@ -9,14 +9,14 @@ def get_podcast_config(db_path: str, config_id: int) -> Optional[Dict[str, Any]]
         with db_connection(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-            """
+                """
             SELECT id, name, description, prompt, time_range_hours, limit_articles, 
                    is_active, tts_engine, language_code, podcast_script_prompt, 
                    image_prompt, created_at, updated_at
             FROM podcast_configs
             WHERE id = ?
             """,
-            (config_id,),
+                (config_id,),
             )
             row = cursor.fetchone()
             if not row:
@@ -81,27 +81,27 @@ def create_podcast_config(
             cursor = conn.cursor()
             now = datetime.now().isoformat()
             cursor.execute(
-            """
+                """
             INSERT INTO podcast_configs
             (name, description, prompt, time_range_hours, limit_articles, 
              is_active, tts_engine, language_code, podcast_script_prompt, 
              image_prompt, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (
-                name,
-                description,
-                prompt,
-                time_range_hours,
-                limit_articles,
-                1 if is_active else 0,
-                tts_engine,
-                language_code,
-                podcast_script_prompt,
-                image_prompt,
-                now,
-                now,
-            ),
+                (
+                    name,
+                    description,
+                    prompt,
+                    time_range_hours,
+                    limit_articles,
+                    1 if is_active else 0,
+                    tts_engine,
+                    language_code,
+                    podcast_script_prompt,
+                    image_prompt,
+                    now,
+                    now,
+                ),
             )
             conn.commit()
             return cursor.lastrowid
@@ -173,12 +173,12 @@ def toggle_podcast_config(db_path: str, config_id: int, is_active: bool) -> bool
             cursor = conn.cursor()
             now = datetime.now().isoformat()
             cursor.execute(
-            """
+                """
             UPDATE podcast_configs
             SET is_active = ?, updated_at = ?
             WHERE id = ?
             """,
-            (1 if is_active else 0, now, config_id),
+                (1 if is_active else 0, now, config_id),
             )
             conn.commit()
             return cursor.rowcount > 0

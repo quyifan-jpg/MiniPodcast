@@ -6,8 +6,6 @@ breaks on the current langchain_core version (missing langchain_v1 tracer).
 Explicitly collecting and unregistering it before any test collection runs.
 """
 
-import sys
-
 
 def pytest_configure(config):
     # Block deepeval's pytest plugin — it fails to import due to a

@@ -166,6 +166,7 @@ INITIAL_SESSION_STATE = {
     "show_audio_for_confirmation": False,
 }
 
+
 def _get_mysql_db_url() -> str:
     db_url = os.environ.get("DATABASE_URL", "")
     if not db_url.startswith(("mysql://", "mysql+pymysql://")):

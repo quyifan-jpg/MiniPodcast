@@ -17,13 +17,13 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
-from rag.models import ChannelResult, ChannelType, RetrievedChunk, SearchContext
+from rag.models import ChannelType, RetrievedChunk, SearchContext
 from rag.postprocessors.rerank import RerankProcessor
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _ctx(query: str = "AI in healthcare", top_k: int = 5) -> SearchContext:
     return SearchContext(original_query=query, top_k=top_k)
@@ -50,6 +50,7 @@ def _jina_response(results: list[dict]) -> MagicMock:
 
 # ── is_enabled ────────────────────────────────────────────────────────────────
 
+
 class TestIsEnabled:
     def test_disabled_when_no_key(self):
         proc = RerankProcessor(provider="jina", api_key=None)
@@ -69,6 +70,7 @@ class TestIsEnabled:
 
 # ── Jina: title passing ───────────────────────────────────────────────────────
 
+
 class TestJinaRerank:
     def _make_proc(self, model="jina-reranker-v2-base-multilingual"):
         return RerankProcessor(provider="jina", api_key="jina_test_key", model=model)
@@ -85,10 +87,12 @@ class TestJinaRerank:
 
         def fake_post(url, *, headers, json, timeout):
             captured_payload.update(json)
-            return _jina_response([
-                {"index": 0, "relevance_score": 0.9},
-                {"index": 1, "relevance_score": 0.3},
-            ])
+            return _jina_response(
+                [
+                    {"index": 0, "relevance_score": 0.9},
+                    {"index": 1, "relevance_score": 0.3},
+                ]
+            )
 
         with patch("requests.post", side_effect=fake_post):
             proc.process(chunks, [], _ctx())
@@ -104,32 +108,42 @@ class TestJinaRerank:
         """chunk.score must reflect relevance_score returned by Jina."""
         proc = self._make_proc()
         chunks = [
-            _chunk("a", "Article A", score=0.9),   # high RRF score
+            _chunk("a", "Article A", score=0.9),  # high RRF score
             _chunk("b", "Article B", score=0.5),
         ]
 
-        with patch("requests.post", return_value=_jina_response([
-            {"index": 0, "relevance_score": 0.2},   # Jina says A is NOT relevant
-            {"index": 1, "relevance_score": 0.95},  # Jina says B IS relevant
-        ])):
+        with patch(
+            "requests.post",
+            return_value=_jina_response(
+                [
+                    {"index": 0, "relevance_score": 0.2},  # Jina says A is NOT relevant
+                    {"index": 1, "relevance_score": 0.95},  # Jina says B IS relevant
+                ]
+            ),
+        ):
             result = proc.process(chunks, [], _ctx())
 
-        assert result[0].id == "b"   # B now ranks first
+        assert result[0].id == "b"  # B now ranks first
         assert result[1].id == "a"
         assert abs(result[0].score - 0.95) < 0.001
-        assert abs(result[1].score - 0.2)  < 0.001
+        assert abs(result[1].score - 0.2) < 0.001
 
     def test_sorted_by_relevance_score(self):
         proc = self._make_proc()
         chunks = [_chunk(str(i), f"Article {i}") for i in range(4)]
 
         # Jina returns scores in reverse order
-        with patch("requests.post", return_value=_jina_response([
-            {"index": 0, "relevance_score": 0.1},
-            {"index": 1, "relevance_score": 0.9},
-            {"index": 2, "relevance_score": 0.5},
-            {"index": 3, "relevance_score": 0.7},
-        ])):
+        with patch(
+            "requests.post",
+            return_value=_jina_response(
+                [
+                    {"index": 0, "relevance_score": 0.1},
+                    {"index": 1, "relevance_score": 0.9},
+                    {"index": 2, "relevance_score": 0.5},
+                    {"index": 3, "relevance_score": 0.7},
+                ]
+            ),
+        ):
             result = proc.process(chunks, [], _ctx(top_k=4))
 
         scores = [r.score for r in result]
@@ -142,10 +156,12 @@ class TestJinaRerank:
 
         def fake_post(url, *, headers, json, timeout):
             captured.update(json)
-            return _jina_response([
-                {"index": 0, "relevance_score": 0.8},
-                {"index": 1, "relevance_score": 0.4},
-            ])
+            return _jina_response(
+                [
+                    {"index": 0, "relevance_score": 0.8},
+                    {"index": 1, "relevance_score": 0.4},
+                ]
+            )
 
         with patch("requests.post", side_effect=fake_post):
             proc.process(chunks, [], _ctx(query="AI in healthcare"))
@@ -159,10 +175,12 @@ class TestJinaRerank:
 
         def fake_post(url, *, headers, json, timeout):
             captured_headers.update(headers)
-            return _jina_response([
-                {"index": 0, "relevance_score": 0.8},
-                {"index": 1, "relevance_score": 0.4},
-            ])
+            return _jina_response(
+                [
+                    {"index": 0, "relevance_score": 0.8},
+                    {"index": 1, "relevance_score": 0.4},
+                ]
+            )
 
         with patch("requests.post", side_effect=fake_post):
             proc.process(chunks, [], _ctx())
@@ -181,7 +199,7 @@ class TestJinaRerank:
         with patch("requests.post", side_effect=fail_post):
             result = proc.process(chunks, [], _ctx())
 
-        assert [r.id for r in result] == ["a", "b"]   # order unchanged
+        assert [r.id for r in result] == ["a", "b"]  # order unchanged
         assert [r.score for r in result] == original_scores
 
     def test_single_chunk_skips_api(self):
@@ -199,19 +217,19 @@ class TestJinaRerank:
         """Chunks with empty title fall back to plain content string."""
         proc = self._make_proc()
         chunks = [
-            RetrievedChunk(id="1", content="some content", title="", url="", score=0.5,
-                           source_channel=ChannelType.CHUNK_VECTOR),
-            RetrievedChunk(id="2", content="more content", title="", url="", score=0.4,
-                           source_channel=ChannelType.CHUNK_VECTOR),
+            RetrievedChunk(id="1", content="some content", title="", url="", score=0.5, source_channel=ChannelType.CHUNK_VECTOR),
+            RetrievedChunk(id="2", content="more content", title="", url="", score=0.4, source_channel=ChannelType.CHUNK_VECTOR),
         ]
         captured = {}
 
         def fake_post(url, *, headers, json, timeout):
             captured.update(json)
-            return _jina_response([
-                {"index": 0, "relevance_score": 0.7},
-                {"index": 1, "relevance_score": 0.3},
-            ])
+            return _jina_response(
+                [
+                    {"index": 0, "relevance_score": 0.7},
+                    {"index": 1, "relevance_score": 0.3},
+                ]
+            )
 
         with patch("requests.post", side_effect=fake_post):
             proc.process(chunks, [], _ctx())
@@ -221,6 +239,7 @@ class TestJinaRerank:
 
 
 # ── Pipeline integration: is rerank actually in the chain? ───────────────────
+
 
 class TestPipelineIntegration:
     """Verifies RerankProcessor is wired into factory when config says so."""
@@ -233,25 +252,26 @@ class TestPipelineIntegration:
         from unittest.mock import patch as _patch
 
         fake_settings = MagicMock()
-        fake_settings.chunk_vector_enabled   = False
+        fake_settings.chunk_vector_enabled = False
         fake_settings.article_vector_enabled = False
-        fake_settings.keyword_enabled        = False
-        fake_settings.social_media_enabled   = False
+        fake_settings.keyword_enabled = False
+        fake_settings.social_media_enabled = False
         fake_settings.external_search_enabled = False
-        fake_settings.dedup_enabled          = False
-        fake_settings.rrf_enabled            = False
-        fake_settings.freshness_enabled      = False
+        fake_settings.dedup_enabled = False
+        fake_settings.rrf_enabled = False
+        fake_settings.freshness_enabled = False
         fake_settings.quality_filter_enabled = False
-        fake_settings.channel_timeout_s      = 30.0
+        fake_settings.channel_timeout_s = 30.0
 
         # Enable rerank
-        fake_settings.rerank_enabled   = True
-        fake_settings.rerank_provider  = "jina"
-        fake_settings.rerank_api_key   = "jina_test"
-        fake_settings.rerank_model     = "jina-reranker-v2-base-multilingual"
+        fake_settings.rerank_enabled = True
+        fake_settings.rerank_provider = "jina"
+        fake_settings.rerank_api_key = "jina_test"
+        fake_settings.rerank_model = "jina-reranker-v2-base-multilingual"
 
         with _patch("rag.factory.rag_settings", fake_settings):
             from rag.factory import create_retrieval_engine
+
             engine = create_retrieval_engine()
 
         processor_types = [type(p).__name__ for p in engine._postprocessors]
@@ -261,20 +281,21 @@ class TestPipelineIntegration:
         from unittest.mock import patch as _patch
 
         fake_settings = MagicMock()
-        fake_settings.chunk_vector_enabled   = False
+        fake_settings.chunk_vector_enabled = False
         fake_settings.article_vector_enabled = False
-        fake_settings.keyword_enabled        = False
-        fake_settings.social_media_enabled   = False
+        fake_settings.keyword_enabled = False
+        fake_settings.social_media_enabled = False
         fake_settings.external_search_enabled = False
-        fake_settings.dedup_enabled          = False
-        fake_settings.rrf_enabled            = False
-        fake_settings.freshness_enabled      = False
+        fake_settings.dedup_enabled = False
+        fake_settings.rrf_enabled = False
+        fake_settings.freshness_enabled = False
         fake_settings.quality_filter_enabled = False
-        fake_settings.channel_timeout_s      = 30.0
-        fake_settings.rerank_enabled         = False   # disabled
+        fake_settings.channel_timeout_s = 30.0
+        fake_settings.rerank_enabled = False  # disabled
 
         with _patch("rag.factory.rag_settings", fake_settings):
             from rag.factory import create_retrieval_engine
+
             engine = create_retrieval_engine()
 
         processor_types = [type(p).__name__ for p in engine._postprocessors]

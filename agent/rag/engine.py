@@ -109,9 +109,7 @@ class MultiChannelRetrievalEngine:
 
         return processed
 
-    async def _execute_channels(
-        self, context: SearchContext
-    ) -> list[ChannelResult]:
+    async def _execute_channels(self, context: SearchContext) -> list[ChannelResult]:
         """Run all enabled channels in parallel with per-channel fault isolation."""
         enabled = [ch for ch in self._channels if ch.is_enabled(context)]
 
@@ -127,10 +125,7 @@ class MultiChannelRetrievalEngine:
         )
 
         # Launch all channels concurrently
-        tasks = [
-            self._safe_search(channel, context)
-            for channel in enabled
-        ]
+        tasks = [self._safe_search(channel, context) for channel in enabled]
         results = await asyncio.gather(*tasks)
 
         # Log per-channel stats
@@ -145,9 +140,7 @@ class MultiChannelRetrievalEngine:
 
         return list(results)
 
-    async def _safe_search(
-        self, channel: SearchChannel, context: SearchContext
-    ) -> ChannelResult:
+    async def _safe_search(self, channel: SearchChannel, context: SearchContext) -> ChannelResult:
         """
         Execute a single channel with timeout and error isolation.
 

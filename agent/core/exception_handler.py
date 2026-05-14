@@ -19,12 +19,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from core.exceptions import (
-    ClientException,
-    ForbiddenException,
     MiniblogException,
-    NotFoundException,
-    TooManyRequestsException,
-    UnauthorizedException,
 )
 from core.response import ApiResponse
 
@@ -37,14 +32,17 @@ def _get_logger():
     if _logger is None:
         try:
             from loguru import logger
+
             _logger = logger
         except ImportError:
             import logging
+
             _logger = logging.getLogger(__name__)
     return _logger
 
 
 # ── HTTP status mapping ────────────────────────────────────────────────────────
+
 
 def _domain_code_to_http_status(code: int) -> int:
     """Map application error code to HTTP status code."""
@@ -55,6 +53,7 @@ def _domain_code_to_http_status(code: int) -> int:
 
 
 # ── Exception Handlers ────────────────────────────────────────────────────────
+
 
 async def miniblog_exception_handler(
     request: Request,
@@ -122,11 +121,13 @@ async def validation_exception_handler(
     """
     field_errors = []
     for error in exc.errors():
-        field_errors.append({
-            "field": " → ".join(str(loc) for loc in error["loc"] if loc != "body"),
-            "message": error["msg"],
-            "type": error["type"],
-        })
+        field_errors.append(
+            {
+                "field": " → ".join(str(loc) for loc in error["loc"] if loc != "body"),
+                "message": error["msg"],
+                "type": error["type"],
+            }
+        )
 
     return ApiResponse.error(
         code=422,
@@ -158,6 +159,7 @@ async def unhandled_exception_handler(
 
 # ── Registration helper ────────────────────────────────────────────────────────
 
+
 def register_exception_handlers(app: FastAPI) -> None:
     """
     Register all global exception handlers on the FastAPI app instance.
@@ -170,6 +172,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
 
 # ── Private helpers ────────────────────────────────────────────────────────────
+
 
 def _default_message(status_code: int) -> str:
     messages = {

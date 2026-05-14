@@ -20,7 +20,6 @@ Usage:
 from __future__ import annotations
 
 import time
-from typing import Optional
 
 from loguru import logger
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -28,18 +27,19 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from core.config import settings
-from core.exceptions import TooManyRequestsException
 
 # Paths exempt from rate limiting
-_EXEMPT_PATHS = frozenset([
-    "/health",
-    "/health/detail",
-    "/metrics",
-    "/docs",
-    "/openapi.json",
-    "/redoc",
-    "/favicon.ico",
-])
+_EXEMPT_PATHS = frozenset(
+    [
+        "/health",
+        "/health/detail",
+        "/metrics",
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+        "/favicon.ico",
+    ]
+)
 
 # Endpoints that use the stricter chat rate limit
 _CHAT_PATH_PREFIX = "/api/v1/podcast-agent"
@@ -79,6 +79,7 @@ def _get_redis_client():
     """Lazy-load Redis client to avoid import-time side effects."""
     try:
         import redis.asyncio as aioredis
+
         kwargs = {
             "host": settings.redis_host,
             "port": settings.redis_port,
@@ -130,11 +131,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Determine tier
         is_chat = path.startswith(_CHAT_PATH_PREFIX)
         if is_chat:
-            session_id = (
-                request.headers.get("X-Session-ID")
-                or request.query_params.get("session_id")
-                or ""
-            )
+            session_id = request.headers.get("X-Session-ID") or request.query_params.get("session_id") or ""
             limit_key = f"ratelimit:chat:{session_id}" if session_id else None
             max_requests = settings.chat_rate_limit_requests
         else:

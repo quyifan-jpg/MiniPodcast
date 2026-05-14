@@ -36,7 +36,9 @@ else:
 
 # Debug: Print Redis connection info (without password)
 if REDIS_USERNAME or REDIS_PASSWORD:
-    print(f"[Redis Config] Using authenticated connection: redis://{REDIS_USERNAME or ''}:{'***' if REDIS_PASSWORD else ''}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}")
+    print(
+        f"[Redis Config] Using authenticated connection: redis://{REDIS_USERNAME or ''}:{'***' if REDIS_PASSWORD else ''}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+    )
 else:
     print(f"[Redis Config] Using unauthenticated connection: {redis_url}")
 

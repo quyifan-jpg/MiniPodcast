@@ -22,6 +22,7 @@ import json
 
 load_dotenv()
 
+
 def _get_mysql_db_url() -> str:
     db_url = os.environ.get("DATABASE_URL", "")
     if not db_url.startswith(("mysql://", "mysql+pymysql://")):

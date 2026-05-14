@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 # ─── Pydantic models (shared with search_agent.py) ───────────────────────────
 
+
 class ReturnItem(BaseModel):
     url: str = Field(..., description="The URL of the search result")
     title: str = Field(..., description="The title of the search result")
@@ -44,6 +45,7 @@ class SearchResults(BaseModel):
 
 # ─── Graph state TypedDicts ───────────────────────────────────────────────────
 
+
 def _merge_results(a: List[Dict], b: List[Dict]) -> List[Dict]:
     """Merge two result lists, deduplicating by URL."""
     seen = {r.get("url") for r in a if r.get("url")}
@@ -58,6 +60,7 @@ class SearchState(TypedDict):
     the ReAct agent appends AIMessages (Thought / tool-call), ToolMessages
     (Observation), and a final AIMessage summary automatically.
     """
+
     query: str
     session_id: str
     # LangGraph messages channel; ReAct agent writes Thought/Action/Observation here
@@ -74,6 +77,7 @@ class ScrapeState(TypedDict):
     verify_url nodes are automatically concatenated by LangGraph's reducer.
     'errors' uses the same strategy to accumulate per-node error messages.
     """
+
     query: str
     session_id: str
     # Input: output of the batch browser crawl (set once before fan-out)
@@ -90,5 +94,6 @@ class VerifyUrlInput(TypedDict):
     This is NOT a full ScrapeState — LangGraph delivers it only to the
     target node; the node's return dict is then merged into ScrapeState.
     """
+
     item: Dict[str, Any]
     query: str

@@ -22,6 +22,7 @@ router = APIRouter()
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
+
 def _hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
@@ -39,6 +40,7 @@ def _make_token(user_id: int) -> TokenResponse:
 
 
 # ── routes ────────────────────────────────────────────────────────────────────
+
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest):

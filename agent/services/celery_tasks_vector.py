@@ -29,6 +29,7 @@ def embed_article(self, article_id: int):
     """
     try:
         from services.vector_index_service import vector_index_service
+
         return vector_index_service.rebuild_article(article_id)
     except Exception as e:
         logger.error(
@@ -50,4 +51,5 @@ def index_pending_batch(batch_size: int = 50):
     stays in sync even when fast-path dispatches are lost.
     """
     from services.vector_index_service import vector_index_service
+
     return vector_index_service.index_pending(batch_size=batch_size)

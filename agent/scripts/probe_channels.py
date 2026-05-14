@@ -30,10 +30,10 @@ from rag.models import RetrievedChunk  # noqa: E402
 
 
 QUERIES: list[str] = [
-    "GPT-4o multimodal capabilities",         # literal / acronym — keyword should help
-    "AI startup latest funding rounds",       # time-sensitive — external/social bias
-    "transformer attention mechanism",        # static knowledge — chunk/article vector
-    "Sam Altman recent statements",           # named entity — mixed
+    "GPT-4o multimodal capabilities",  # literal / acronym — keyword should help
+    "AI startup latest funding rounds",  # time-sensitive — external/social bias
+    "transformer attention mechanism",  # static knowledge — chunk/article vector
+    "Sam Altman recent statements",  # named entity — mixed
     "Kubernetes operator pattern explained",  # technical jargon — keyword + vector
 ]
 

@@ -11,13 +11,10 @@ Run:
 from __future__ import annotations
 
 import asyncio
-import pytest
-from dataclasses import dataclass
 
 from rag.models import (
     ChannelResult,
     ChannelType,
-    CHANNEL_PRIORITY,
     RetrievedChunk,
     SearchContext,
 )
@@ -324,9 +321,13 @@ class TestEngine:
         engine = MultiChannelRetrievalEngine(
             channels=[
                 MockChannel(ChannelType.CHUNK_VECTOR, 1, [_chunk("1")], enabled=False),
-                MockChannel(ChannelType.KEYWORD, 3, [
-                    _chunk("2", channel=ChannelType.KEYWORD),
-                ]),
+                MockChannel(
+                    ChannelType.KEYWORD,
+                    3,
+                    [
+                        _chunk("2", channel=ChannelType.KEYWORD),
+                    ],
+                ),
             ],
             postprocessors=[],
         )

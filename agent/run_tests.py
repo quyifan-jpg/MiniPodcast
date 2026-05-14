@@ -10,6 +10,7 @@ Usage:
     python3 run_tests.py tests/ -v
     python3 run_tests.py tests/test_rag_engine.py -v
 """
+
 import sys
 import types
 
@@ -33,6 +34,6 @@ for _name in [
 ]:
     sys.modules[_name] = _make_stub(_name)
 
-import pytest
+import pytest  # noqa: E402
 
 sys.exit(pytest.main(sys.argv[1:]))

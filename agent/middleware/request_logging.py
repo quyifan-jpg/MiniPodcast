@@ -25,12 +25,14 @@ from starlette.responses import Response
 from core.logging import set_request_id, set_session_id
 
 # Paths to skip from access logging (reduces noise from health probes)
-_SILENT_PATHS = frozenset([
-    "/health",
-    "/health/detail",
-    "/metrics",
-    "/favicon.ico",
-])
+_SILENT_PATHS = frozenset(
+    [
+        "/health",
+        "/health/detail",
+        "/metrics",
+        "/favicon.ico",
+    ]
+)
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):

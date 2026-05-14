@@ -36,7 +36,6 @@ unchanged.
 
 from __future__ import annotations
 
-import os
 from typing import Any, Dict, List
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
@@ -120,6 +119,7 @@ def run_search_pipeline(query: str, session_id: str) -> List[Dict[str, Any]]:
          is_scrapping_required}
     """
     from services.model_router import router
+
     llm = router.get_chat_model()
     tools = make_search_tools(session_id)
 
@@ -131,11 +131,7 @@ def run_search_pipeline(query: str, session_id: str) -> List[Dict[str, Any]]:
     )
 
     print(f"\n[ReAct Search] Starting pipeline for query: '{query}'")
-    result = react_agent.invoke({
-        "messages": [
-            HumanMessage(content=f"Find diverse, high-quality sources about: {query}")
-        ]
-    })
+    result = react_agent.invoke({"messages": [HumanMessage(content=f"Find diverse, high-quality sources about: {query}")]})
 
     # Log the full Thought/Action/Observation chain
     _log_react_chain(result.get("messages", []))
@@ -163,27 +159,26 @@ def _fallback_parse(
     """
     # Collect all tool observations as the evidence base
     observations: List[str] = [
-        f"Tool '{msg.name}' returned:\n{str(msg.content)[:600]}"
-        for msg in messages
-        if isinstance(msg, ToolMessage) and msg.content
+        f"Tool '{msg.name}' returned:\n{str(msg.content)[:600]}" for msg in messages if isinstance(msg, ToolMessage) and msg.content
     ]
     if not observations:
         return []
 
     formatter = llm.with_structured_output(SearchResults)
     try:
-        formatted: SearchResults = formatter.invoke([
-            SystemMessage(content=(
-                "Based on the tool results below, extract a list of distinct, "
-                "high-quality source items. Each item must have: url, title, "
-                "description, source_name, tool_used, published_date, "
-                "is_scrapping_required."
-            )),
-            HumanMessage(content=(
-                f"Search query: {query}\n\n"
-                + "\n\n".join(observations)
-            )),
-        ])
+        formatted: SearchResults = formatter.invoke(
+            [
+                SystemMessage(
+                    content=(
+                        "Based on the tool results below, extract a list of distinct, "
+                        "high-quality source items. Each item must have: url, title, "
+                        "description, source_name, tool_used, published_date, "
+                        "is_scrapping_required."
+                    )
+                ),
+                HumanMessage(content=(f"Search query: {query}\n\n" + "\n\n".join(observations))),
+            ]
+        )
         items = [item.model_dump() for item in formatted.items] if formatted else []
         print(f"[ReAct Search] Fallback parser: {len(items)} sources extracted")
         return items
@@ -212,9 +207,8 @@ Return an empty full_text string for pages that are irrelevant or too low qualit
 
 class _VerifiedContent(BaseModel):
     """Structured output for the per-URL LLM verification step."""
-    full_text: str = Field(
-        description="Cleaned, relevant text content. Empty string if irrelevant or low quality."
-    )
+
+    full_text: str = Field(description="Cleaned, relevant text content. Empty string if irrelevant or low quality.")
     published_date: str = Field(
         default="",
         description="Publication date in ISO format (YYYY-MM-DD). Empty if not found.",
@@ -248,17 +242,16 @@ def _verify_single_url(state: VerifyUrlInput) -> Dict[str, Any]:
 
     try:
         from services.model_router import router
+
         llm = router.get_chat_model()
         verifier = llm.with_structured_output(_VerifiedContent)
 
-        result: _VerifiedContent = verifier.invoke([
-            SystemMessage(content=VERIFY_SYSTEM_PROMPT),
-            HumanMessage(content=(
-                f"Query: {query}\n"
-                f"URL: {url}\n\n"
-                f"Content to verify:\n{item['full_text'][:3000]}"
-            )),
-        ])
+        result: _VerifiedContent = verifier.invoke(
+            [
+                SystemMessage(content=VERIFY_SYSTEM_PROMPT),
+                HumanMessage(content=(f"Query: {query}\nURL: {url}\n\nContent to verify:\n{item['full_text'][:3000]}")),
+            ]
+        )
 
         verified_item = {
             **item,
@@ -292,10 +285,7 @@ def _route_to_verify(state: ScrapeState) -> List[Send]:
     crawled = state.get("crawled_results", [])
     query = state["query"]
     print(f"\n[Parallel Verify] Fanning out to {len(crawled)} parallel verify nodes")
-    return [
-        Send("verify_url", {"item": item, "query": query})
-        for item in crawled
-    ]
+    return [Send("verify_url", {"item": item, "query": query}) for item in crawled]
 
 
 # Module-level compiled graph (built once, reused across Celery tasks)

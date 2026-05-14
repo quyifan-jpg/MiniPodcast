@@ -55,9 +55,10 @@ def _tokenize(text: str) -> list[str]:
 @dataclass
 class _IndexSnapshot:
     """Immutable BM25 snapshot. Replaced atomically on rebuild."""
+
     bm25: BM25Okapi
-    article_ids: list[int]   # parallel to bm25's corpus
-    built_at: float          # unix seconds
+    article_ids: list[int]  # parallel to bm25's corpus
+    built_at: float  # unix seconds
 
 
 # ── Singleton index with TTL refresh ──────────────────────────────────
@@ -76,9 +77,7 @@ class BM25Index:
 
     # ── Public API ─────────────────────────────────────────────────
 
-    def search(
-        self, query: str, *, top_k: int = 20
-    ) -> list[tuple[int, float]]:
+    def search(self, query: str, *, top_k: int = 20) -> list[tuple[int, float]]:
         """
         Return top-k (article_id, score) for the query.
 
@@ -98,6 +97,7 @@ class BM25Index:
         # Rank by score, take top-k that have non-zero relevance.
         # numpy.argsort is fastest path; we slice top-k from the tail.
         import numpy as np
+
         order = np.argsort(scores)[::-1][:top_k]
 
         results: list[tuple[int, float]] = []
@@ -166,10 +166,7 @@ class BM25Index:
         article_ids: list[int] = []
         tokens_corpus: list[list[str]] = []
         for row in rows:
-            text = " ".join(
-                str(row.get(col, "") or "")
-                for col in ("title", "summary", "content")
-            )
+            text = " ".join(str(row.get(col, "") or "") for col in ("title", "summary", "content"))
             tokens = _tokenize(text)
             if not tokens:
                 # rank-bm25 errors on empty token lists; insert a

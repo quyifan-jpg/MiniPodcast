@@ -85,19 +85,21 @@ class KeywordChannel(SearchChannel):
             title_match = query_lower in title.lower() if title else False
             score = 1.0 if title_match else 0.8
 
-            chunks.append(RetrievedChunk(
-                id=str(row["id"]),
-                content=row.get("content", ""),
-                title=title,
-                url=row.get("url", ""),
-                score=score,
-                source_channel=ChannelType.KEYWORD,
-                metadata={
-                    MetadataKey.PUBLISHED_DATE: row.get("published_date", ""),
-                    MetadataKey.SOURCE_ID:      str(row.get("source_id", "")),
-                    MetadataKey.MATCH_TYPE:     "title" if title_match else "content",
-                },
-            ))
+            chunks.append(
+                RetrievedChunk(
+                    id=str(row["id"]),
+                    content=row.get("content", ""),
+                    title=title,
+                    url=row.get("url", ""),
+                    score=score,
+                    source_channel=ChannelType.KEYWORD,
+                    metadata={
+                        MetadataKey.PUBLISHED_DATE: row.get("published_date", ""),
+                        MetadataKey.SOURCE_ID: str(row.get("source_id", "")),
+                        MetadataKey.MATCH_TYPE: "title" if title_match else "content",
+                    },
+                )
+            )
 
         elapsed = (time.perf_counter() - start) * 1000
         logger.info(

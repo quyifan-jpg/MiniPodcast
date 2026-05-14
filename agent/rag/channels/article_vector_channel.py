@@ -79,18 +79,20 @@ class ArticleVectorChannel(SearchChannel):
         for article in articles:
             aid = article["id"]
             sim = sim_map.get(aid, 0.0)
-            chunks.append(RetrievedChunk(
-                id=str(aid),
-                content=article.get("summary") or (article.get("content", "")[:500]),
-                title=article.get("title", "Untitled"),
-                url=article.get("url", ""),
-                score=sim,
-                source_channel=ChannelType.ARTICLE_VECTOR,
-                metadata={
-                    MetadataKey.PUBLISHED_DATE: article.get("published_date", ""),
-                    MetadataKey.SOURCE_ID:      str(article.get("source_id", "")),
-                },
-            ))
+            chunks.append(
+                RetrievedChunk(
+                    id=str(aid),
+                    content=article.get("summary") or (article.get("content", "")[:500]),
+                    title=article.get("title", "Untitled"),
+                    url=article.get("url", ""),
+                    score=sim,
+                    source_channel=ChannelType.ARTICLE_VECTOR,
+                    metadata={
+                        MetadataKey.PUBLISHED_DATE: article.get("published_date", ""),
+                        MetadataKey.SOURCE_ID: str(article.get("source_id", "")),
+                    },
+                )
+            )
 
         chunks.sort(key=lambda c: c.score, reverse=True)
 
@@ -161,8 +163,7 @@ class ArticleVectorChannel(SearchChannel):
         placeholders = ",".join(["%s"] * len(article_ids))
         rows = execute_query(
             db_path,
-            f"SELECT id, title, url, published_date, summary, content, source_id "
-            f"FROM crawled_articles WHERE id IN ({placeholders})",
+            f"SELECT id, title, url, published_date, summary, content, source_id FROM crawled_articles WHERE id IN ({placeholders})",
             article_ids,
             fetch=True,
         )

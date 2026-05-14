@@ -96,19 +96,21 @@ class SocialMediaChannel(SearchChannel):
             post_text = row.get("post_text", "")
             platform = row.get("platform", "social")
 
-            chunks.append(RetrievedChunk(
-                id=f"social_{row['post_id']}",
-                content=post_text[:500] if len(post_text) > 500 else post_text,
-                title=f"@{row.get('user_display_name', 'unknown')} on {platform.title()}",
-                url=row.get("post_url", ""),
-                score=score,
-                source_channel=ChannelType.SOCIAL_MEDIA,
-                metadata={
-                    MetadataKey.PUBLISHED_DATE: row.get("post_timestamp", ""),
-                    MetadataKey.PLATFORM:       platform,
-                    MetadataKey.ENGAGEMENT:     engagement,
-                },
-            ))
+            chunks.append(
+                RetrievedChunk(
+                    id=f"social_{row['post_id']}",
+                    content=post_text[:500] if len(post_text) > 500 else post_text,
+                    title=f"@{row.get('user_display_name', 'unknown')} on {platform.title()}",
+                    url=row.get("post_url", ""),
+                    score=score,
+                    source_channel=ChannelType.SOCIAL_MEDIA,
+                    metadata={
+                        MetadataKey.PUBLISHED_DATE: row.get("post_timestamp", ""),
+                        MetadataKey.PLATFORM: platform,
+                        MetadataKey.ENGAGEMENT: engagement,
+                    },
+                )
+            )
 
         elapsed = (time.perf_counter() - start) * 1000
         logger.info(

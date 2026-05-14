@@ -20,7 +20,6 @@ FastAPI Dependency for route-level auth:
 
 from __future__ import annotations
 
-import os
 from typing import Optional
 
 import jwt
@@ -33,24 +32,26 @@ from core.config import settings
 from core.logging import set_user_id
 
 # Paths that never require authentication
-_PUBLIC_PATHS = frozenset([
-    "/health",
-    "/health/detail",
-    "/metrics",
-    "/docs",
-    "/openapi.json",
-    "/redoc",
-    "/favicon.ico",
-    "/manifest.json",
-    "/api/auth/register",
-    "/api/auth/login",
-])
+_PUBLIC_PATHS = frozenset(
+    [
+        "/health",
+        "/health/detail",
+        "/metrics",
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+        "/favicon.ico",
+        "/manifest.json",
+        "/api/auth/register",
+        "/api/auth/login",
+    ]
+)
 
 # Path prefixes that REQUIRE authentication
 # Tighten this list gradually as the frontend adopts token auth.
 _PROTECTED_PREFIXES = [
-    "/api/auth/me",          # user profile — always needs token
-    "/api/podcast-agent",   # chat sessions — always user-scoped
+    "/api/auth/me",  # user profile — always needs token
+    "/api/podcast-agent",  # chat sessions — always user-scoped
     # "/api/podcasts",       # uncomment to protect podcast management
     # "/api/tasks",          # uncomment to protect task management
 ]
@@ -94,6 +95,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 # ── FastAPI dependencies ───────────────────────────────────────────────────────
 
+
 async def get_current_user(request: Request) -> Optional[str]:
     """
     FastAPI dependency that returns the authenticated user_id, or None
@@ -115,11 +117,13 @@ async def require_auth(request: Request) -> str:
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=401, detail="Authentication required")
     return user_id
 
 
 # ── Token helpers ──────────────────────────────────────────────────────────────
+
 
 def create_access_token(user_id: str, extra_claims: dict = None) -> str:
     """
@@ -130,6 +134,7 @@ def create_access_token(user_id: str, extra_claims: dict = None) -> str:
         # Return to client, client sends as: Authorization: Bearer <token>
     """
     import time
+
     payload = {
         "sub": user_id,
         "iat": int(time.time()),

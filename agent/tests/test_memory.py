@@ -10,9 +10,7 @@ Run:
 
 from __future__ import annotations
 
-import json
-from unittest.mock import MagicMock, patch, PropertyMock
-import pytest
+from unittest.mock import patch
 
 from memory.config import MemorySettings
 from memory.manager import (
@@ -34,8 +32,8 @@ def _make_messages(n_turns: int) -> list:
     """Create a conversation with n user turns (n*2 total messages)."""
     messages = []
     for i in range(n_turns):
-        messages.append({"role": "user", "content": f"User message {i+1}"})
-        messages.append({"role": "assistant", "content": f"Assistant reply {i+1}"})
+        messages.append({"role": "user", "content": f"User message {i + 1}"})
+        messages.append({"role": "assistant", "content": f"Assistant reply {i + 1}"})
     return messages
 
 
@@ -178,7 +176,7 @@ class TestSummarizerHelpers:
             {"role": "user", "content": "World"},
         ]
         text = _format_messages(messages)
-        lines = [l for l in text.split("\n") if l.strip()]
+        lines = [ln for ln in text.split("\n") if ln.strip()]
         assert len(lines) == 2
 
 
@@ -243,9 +241,7 @@ class TestMemoryManager:
             {"title": "AI Today", "date": "2026-04-15", "language": "en", "source_count": 3},
         ]
 
-        with patch("memory.manager.memory_settings", _make_settings(
-            summary_enabled=False, preferences_enabled=False
-        )):
+        with patch("memory.manager.memory_settings", _make_settings(summary_enabled=False, preferences_enabled=False)):
             result = MemoryManager.prepare_context(
                 session_id="test-session",
                 instructions=["Step 1"],
@@ -270,9 +266,7 @@ class TestMemoryManager:
 
         messages = _make_messages(10)  # 10 turns, above threshold
 
-        with patch("memory.manager.memory_settings", _make_settings(
-            preferences_enabled=False, history_enabled=False
-        )):
+        with patch("memory.manager.memory_settings", _make_settings(preferences_enabled=False, history_enabled=False)):
             result = MemoryManager.prepare_context(
                 session_id="test-session",
                 instructions=["Step 1"],
@@ -289,9 +283,7 @@ class TestMemoryManager:
         mock_store.ensure_tables.return_value = None
 
         original = ["Step 1", "Step 2"]
-        with patch("memory.manager.memory_settings", _make_settings(
-            summary_enabled=False, preferences_enabled=False, history_enabled=False
-        )):
+        with patch("memory.manager.memory_settings", _make_settings(summary_enabled=False, preferences_enabled=False, history_enabled=False)):
             result = MemoryManager.prepare_context(
                 session_id="test-session",
                 instructions=original,
@@ -310,9 +302,7 @@ class TestMemoryManager:
 
         messages = _make_messages(10)  # 10 turns, divisible by 5
 
-        with patch("memory.manager.memory_settings", _make_settings(
-            summary_enabled=False
-        )):
+        with patch("memory.manager.memory_settings", _make_settings(summary_enabled=False)):
             MemoryManager.post_conversation_update(
                 session_id="test-session",
                 user_id="user-1",
@@ -342,9 +332,7 @@ class TestMemoryManager:
         mock_store.get_preferences.return_value = None
         mock_store.get_recent_podcasts.return_value = []
 
-        with patch("memory.manager.memory_settings", _make_settings(
-            summary_enabled=False, preferences_enabled=False, history_enabled=False
-        )):
+        with patch("memory.manager.memory_settings", _make_settings(summary_enabled=False, preferences_enabled=False, history_enabled=False)):
             result = MemoryManager.prepare_context(
                 session_id="test-session",
                 instructions=None,
@@ -360,10 +348,8 @@ class TestMemoryManager:
         mock_store.get_preferences.return_value = {"preferred_language": "English"}
         mock_store.get_recent_podcasts.return_value = []
 
-        with patch("memory.manager.memory_settings", _make_settings(
-            summary_enabled=False, history_enabled=False
-        )):
-            result = MemoryManager.prepare_context(
+        with patch("memory.manager.memory_settings", _make_settings(summary_enabled=False, history_enabled=False)):
+            MemoryManager.prepare_context(
                 session_id="session-123",
                 user_id="",  # Empty
                 instructions=["Step 1"],
@@ -423,10 +409,7 @@ class TestMemoryManagerIntegration:
         assert "APPENDIX:" in full_text
 
         # Sections should appear before APPENDIX
-        appendix_idx = next(
-            i for i, inst in enumerate(instructions)
-            if isinstance(inst, str) and "APPENDIX" in inst
-        )
+        appendix_idx = next(i for i, inst in enumerate(instructions) if isinstance(inst, str) and "APPENDIX" in inst)
 
         for i, inst in enumerate(instructions):
             if isinstance(inst, str) and "Conversation Summary" in inst:

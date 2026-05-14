@@ -24,8 +24,8 @@ from rag.models import ChannelResult, ChannelType, MetadataKey, RetrievedChunk, 
 
 # ── Defaults ──────────────────────────────────────────────────────────
 EMBEDDING_MODEL = "text-embedding-3-small"
-MIN_SIMILARITY = 0.55          # slightly lower than the tool default (0.60)
-                                # because post-processors will filter further
+MIN_SIMILARITY = 0.55  # slightly lower than the tool default (0.60)
+# because post-processors will filter further
 MAX_CHUNKS_PER_ARTICLE = 3
 
 
@@ -163,8 +163,7 @@ class ChunkVectorChannel(SearchChannel):
         placeholders = ",".join(["%s"] * len(chunk_ids))
         rows = execute_query(
             db_path,
-            f"SELECT id, article_id, chunk_index, chunk_text "
-            f"FROM article_chunks WHERE id IN ({placeholders})",
+            f"SELECT id, article_id, chunk_index, chunk_text FROM article_chunks WHERE id IN ({placeholders})",
             chunk_ids,
             fetch=True,
         )
@@ -178,8 +177,7 @@ class ChunkVectorChannel(SearchChannel):
         placeholders = ",".join(["%s"] * len(article_ids))
         rows = execute_query(
             db_path,
-            f"SELECT id, title, url, published_date, source_id "
-            f"FROM crawled_articles WHERE id IN ({placeholders})",
+            f"SELECT id, title, url, published_date, source_id FROM crawled_articles WHERE id IN ({placeholders})",
             article_ids,
             fetch=True,
         )
@@ -213,19 +211,21 @@ class ChunkVectorChannel(SearchChannel):
             best_sim = max(s for _, s in chunk_sims)
             passages = "\n\n---\n\n".join(c["chunk_text"] for c, _ in chunk_sims)
 
-            results.append(RetrievedChunk(
-                id=str(article_id),
-                content=passages,
-                title=article.get("title", "Untitled"),
-                url=article.get("url", ""),
-                score=best_sim,
-                source_channel=ChannelType.CHUNK_VECTOR,
-                metadata={
-                    MetadataKey.PUBLISHED_DATE: article.get("published_date", ""),
-                    MetadataKey.SOURCE_ID:      str(article.get("source_id", "")),
-                    MetadataKey.CHUNKS_USED:    len(chunk_sims),
-                },
-            ))
+            results.append(
+                RetrievedChunk(
+                    id=str(article_id),
+                    content=passages,
+                    title=article.get("title", "Untitled"),
+                    url=article.get("url", ""),
+                    score=best_sim,
+                    source_channel=ChannelType.CHUNK_VECTOR,
+                    metadata={
+                        MetadataKey.PUBLISHED_DATE: article.get("published_date", ""),
+                        MetadataKey.SOURCE_ID: str(article.get("source_id", "")),
+                        MetadataKey.CHUNKS_USED: len(chunk_sims),
+                    },
+                )
+            )
 
         results.sort(key=lambda x: x.score, reverse=True)
         return results

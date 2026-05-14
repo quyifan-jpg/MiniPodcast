@@ -16,10 +16,10 @@ from db.connection import execute_query
 from utils.load_api_keys import load_api_key
 
 EMBEDDING_MODEL = "text-embedding-3-small"
-TOP_K = 30               # how many chunks to retrieve from FAISS
+TOP_K = 30  # how many chunks to retrieve from FAISS
 MAX_CHUNKS_PER_ARTICLE = 3  # deduplicate: keep at most N chunks per article
-MIN_SIMILARITY = 0.75    # cosine-sim threshold (lower than article search since chunks are smaller)
-FINAL_TOP_K = 8          # number of articles (with passages) to return to the agent
+MIN_SIMILARITY = 0.75  # cosine-sim threshold (lower than article search since chunks are smaller)
+FINAL_TOP_K = 8  # number of articles (with passages) to return to the agent
 
 
 def _generate_query_embedding(query: str) -> list[float] | None:
@@ -35,8 +35,7 @@ def _generate_query_embedding(query: str) -> list[float] | None:
         return None
 
 
-def _search_faiss(query_embedding: list[float], index_path: str,
-                  mapping_path: str, top_k: int) -> list[tuple[int, float]]:
+def _search_faiss(query_embedding: list[float], index_path: str, mapping_path: str, top_k: int) -> list[tuple[int, float]]:
     """Returns [(chunk_id, similarity), ...] sorted by similarity desc."""
     import faiss
 
@@ -129,20 +128,22 @@ def _group_and_rerank(
         # Assemble relevant passages
         passages = "\n\n---\n\n".join(c["chunk_text"] for c, _ in chunk_sims)
 
-        results.append({
-            "id": article_id,
-            "title": article.get("title", "Untitled"),
-            "url": article.get("url", ""),
-            "published_date": article.get("published_date", ""),
-            "source_id": str(article.get("source_id", "")),
-            # Script agent reads full_text; give it the relevant passages only
-            "full_text": passages,
-            "description": passages,
-            "similarity": round(best_sim, 3),
-            "chunks_used": len(chunk_sims),
-            "is_scrapping_required": False,
-            "categories": ["chunk-semantic"],
-        })
+        results.append(
+            {
+                "id": article_id,
+                "title": article.get("title", "Untitled"),
+                "url": article.get("url", ""),
+                "published_date": article.get("published_date", ""),
+                "source_id": str(article.get("source_id", "")),
+                # Script agent reads full_text; give it the relevant passages only
+                "full_text": passages,
+                "description": passages,
+                "similarity": round(best_sim, 3),
+                "chunks_used": len(chunk_sims),
+                "is_scrapping_required": False,
+                "categories": ["chunk-semantic"],
+            }
+        )
 
     # Final ranking: by best similarity score
     results.sort(key=lambda x: x["similarity"], reverse=True)
@@ -170,11 +171,7 @@ def chunk_search(agent: Agent, prompt: str) -> str:
     index_path, mapping_path = get_chunk_faiss_db_path()
 
     if not os.path.exists(index_path):
-        return (
-            "Chunk index not available yet. "
-            "Run `python -m processors.chunk_processor` first, "
-            "then retry."
-        )
+        return "Chunk index not available yet. Run `python -m processors.chunk_processor` first, then retry."
 
     query_embedding = _generate_query_embedding(prompt)
     if query_embedding is None:

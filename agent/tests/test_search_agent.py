@@ -1,20 +1,17 @@
 # main.py
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import List
 from textwrap import dedent
 from dotenv import load_dotenv
-import os
 
 # 加载环境变量
 load_dotenv()
 
 
-
-
 # 导入 jikan_search 工具
-from tools.jikan_search import jikan_search
+from tools.jikan_search import jikan_search  # noqa: E402
 
 
 # ------ 定义 SearchAgent 输出结构（简化） ------

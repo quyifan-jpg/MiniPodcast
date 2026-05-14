@@ -21,13 +21,14 @@ from db.connection import db_connection, execute_query
 from utils.load_api_keys import load_api_key
 
 EMBEDDING_MODEL = "text-embedding-3-small"
-CHUNK_SIZE = 300   # words per chunk
+CHUNK_SIZE = 300  # words per chunk
 CHUNK_OVERLAP = 50  # overlap between consecutive chunks
 
 
 # ─────────────────────────────────────────
 # Chunking
 # ─────────────────────────────────────────
+
 
 def split_into_chunks(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
     """Split text into overlapping word-based chunks."""
@@ -69,6 +70,7 @@ def build_chunk_text(article: dict) -> list[str]:
 # DB helpers
 # ─────────────────────────────────────────
 
+
 def create_chunks_table(db_path: str):
     with db_connection(db_path) as conn:
         cursor = conn.cursor()
@@ -103,19 +105,17 @@ def get_articles_without_chunks(db_path: str, limit: int = 50) -> list[dict]:
     return execute_query(db_path, query, (limit,), fetch=True)
 
 
-def store_chunk(db_path: str, article_id: int, chunk_index: int,
-                chunk_text: str, embedding: list[float]) -> int | None:
+def store_chunk(db_path: str, article_id: int, chunk_index: int, chunk_text: str, embedding: list[float]) -> int | None:
     """Insert a chunk row and return its id."""
     from datetime import datetime
+
     blob = np.array(embedding, dtype=np.float32).tobytes()
     query = """
         INSERT INTO article_chunks (article_id, chunk_index, chunk_text, embedding, in_faiss_index, created_at)
         VALUES (?, ?, ?, ?, 0, ?)
     """
     try:
-        row_id = execute_query(db_path, query,
-                               (article_id, chunk_index, chunk_text, blob,
-                                datetime.now().isoformat()))
+        row_id = execute_query(db_path, query, (article_id, chunk_index, chunk_text, blob, datetime.now().isoformat()))
         return row_id
     except Exception as e:
         print(f"  Error storing chunk {chunk_index} for article {article_id}: {e}")
@@ -125,6 +125,7 @@ def store_chunk(db_path: str, article_id: int, chunk_index: int,
 # ─────────────────────────────────────────
 # FAISS helpers (reused pattern from faiss_indexing_processor)
 # ─────────────────────────────────────────
+
 
 def _load_or_create_index(index_path: str, dimension: int) -> faiss.Index:
     if os.path.exists(index_path):
@@ -219,6 +220,7 @@ def build_chunk_faiss_index(db_path: str, index_path: str, mapping_path: str, ba
 # Main processing loop
 # ─────────────────────────────────────────
 
+
 def process_articles_into_chunks(
     db_path: str | None = None,
     openai_api_key: str | None = None,
@@ -243,10 +245,10 @@ def process_articles_into_chunks(
         article_id = article["id"]
         chunks = build_chunk_text(article)
         if not chunks:
-            print(f"  [{i+1}/{len(articles)}] Article {article_id}: no content, skipping")
+            print(f"  [{i + 1}/{len(articles)}] Article {article_id}: no content, skipping")
             continue
 
-        print(f"  [{i+1}/{len(articles)}] Article {article_id} → {len(chunks)} chunks")
+        print(f"  [{i + 1}/{len(articles)}] Article {article_id} → {len(chunks)} chunks")
 
         for chunk_index, chunk_text in enumerate(chunks):
             try:

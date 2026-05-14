@@ -10,7 +10,7 @@ os.environ["TORCH_CPP_LOG_LEVEL"] = "ERROR"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 warnings.filterwarnings("ignore")
 
-from kokoro import KPipeline
+from kokoro import KPipeline  # noqa: E402
 
 
 def play_audio(file_path):

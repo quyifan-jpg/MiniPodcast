@@ -41,6 +41,7 @@ class MiniblogException(Exception):
 
 # ── 4xx Client Errors ──────────────────────────────────────────────────────────
 
+
 class ClientException(MiniblogException):
     """
     4xx — The caller made an invalid request.
@@ -111,6 +112,7 @@ class ConflictException(ClientException):
 
 
 # ── 5xx Server Errors ──────────────────────────────────────────────────────────
+
 
 class ServiceException(MiniblogException):
     """

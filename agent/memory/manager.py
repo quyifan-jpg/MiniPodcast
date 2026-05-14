@@ -15,7 +15,6 @@ token budgeting across memory layers.
 
 from __future__ import annotations
 
-import json
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -92,9 +91,7 @@ class MemoryManager:
 
         # ── Layer 2: Summary Memory ─────────────────────────────────
         if memory_settings.summary_enabled:
-            summary_text = _get_or_create_summary(
-                session_id, messages, total_turns
-            )
+            summary_text = _get_or_create_summary(session_id, messages, total_turns)
             if summary_text:
                 result["summary"] = summary_text
                 result["instructions"] = _inject_section(
@@ -163,10 +160,7 @@ class MemoryManager:
         total_turns = _count_turns(messages)
 
         # Update summary if conversation is long enough
-        if (
-            memory_settings.summary_enabled
-            and total_turns > memory_settings.summary_trigger_threshold
-        ):
+        if memory_settings.summary_enabled and total_turns > memory_settings.summary_trigger_threshold:
             try:
                 _update_summary(session_id, messages, total_turns)
             except Exception as e:
@@ -188,6 +182,7 @@ class MemoryManager:
 # ═══════════════════════════════════════════════════════════════════════
 # Private helpers
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _count_turns(messages: List[Dict[str, Any]]) -> int:
     """Count user message turns in the conversation."""
@@ -323,6 +318,6 @@ def _format_history(podcasts: List[Dict[str, Any]]) -> str:
         date = p.get("date", "")
         lang = p.get("language", "en")
         sources = p.get("source_count", 0)
-        lines.append(f"- [{date}] \"{title}\" ({lang}, {sources} sources)")
+        lines.append(f'- [{date}] "{title}" ({lang}, {sources} sources)')
 
     return "\n".join(lines)

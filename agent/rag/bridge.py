@@ -16,8 +16,6 @@ Migration path:
 from __future__ import annotations
 
 import asyncio
-import json
-from typing import Any, Dict, List
 
 from loguru import logger
 
@@ -80,6 +78,7 @@ def rag_search_sync(
     if loop and loop.is_running():
         # Already in an async context — create a new thread
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor() as pool:
             future = pool.submit(asyncio.run, rag_search(query, top_k, rewrite_query))
             return future.result()
@@ -99,19 +98,21 @@ def chunks_to_search_results(chunks: list[RetrievedChunk]) -> list[dict]:
     results = []
     for chunk in chunks:
         is_scrapping = chunk.metadata.get("is_scrapping_required", False)
-        results.append({
-            "id": chunk.id,
-            "url": chunk.url,
-            "title": chunk.title,
-            "description": chunk.content[:300] if chunk.content else "",
-            "full_text": chunk.content if not is_scrapping else "",
-            "source_name": chunk.source_channel.value,
-            "tool_used": f"rag_{chunk.source_channel.value}",
-            "published_date": chunk.metadata.get("published_date", ""),
-            "is_scrapping_required": is_scrapping,
-            "similarity": round(chunk.score, 3),
-            "categories": [chunk.source_channel.value],
-        })
+        results.append(
+            {
+                "id": chunk.id,
+                "url": chunk.url,
+                "title": chunk.title,
+                "description": chunk.content[:300] if chunk.content else "",
+                "full_text": chunk.content if not is_scrapping else "",
+                "source_name": chunk.source_channel.value,
+                "tool_used": f"rag_{chunk.source_channel.value}",
+                "published_date": chunk.metadata.get("published_date", ""),
+                "is_scrapping_required": is_scrapping,
+                "similarity": round(chunk.score, 3),
+                "categories": [chunk.source_channel.value],
+            }
+        )
     return results
 
 
@@ -167,6 +168,7 @@ def rag_search_agent_run(agent, query: str) -> str:
 
 
 # ── Private helpers ───────────────────────────────────────────────────
+
 
 def _channel_summary(chunks: list[RetrievedChunk]) -> str:
     """E.g., 'chunk_vector: 5, keyword: 3, external: 2'"""

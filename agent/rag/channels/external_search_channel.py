@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Optional
 
 from loguru import logger
 
@@ -51,9 +50,7 @@ class ExternalSearchChannel(SearchChannel):
         google_task = asyncio.to_thread(self._search_google_news, query)
         ddg_task = asyncio.to_thread(self._search_duckduckgo, query)
 
-        google_results, ddg_results = await asyncio.gather(
-            google_task, ddg_task, return_exceptions=True
-        )
+        google_results, ddg_results = await asyncio.gather(google_task, ddg_task, return_exceptions=True)
 
         # Handle exceptions gracefully
         if isinstance(google_results, Exception):
@@ -75,8 +72,7 @@ class ExternalSearchChannel(SearchChannel):
 
         elapsed = (time.perf_counter() - start) * 1000
         logger.info(
-            "ExternalSearchChannel: {count} results in {ms:.0f}ms "
-            "(google={g}, ddg={d})",
+            "ExternalSearchChannel: {count} results in {ms:.0f}ms (google={g}, ddg={d})",
             count=len(chunks),
             ms=elapsed,
             g=len(google_results) if isinstance(google_results, list) else 0,
@@ -117,19 +113,21 @@ class ExternalSearchChannel(SearchChannel):
             score = 1.0 - (i * 0.1)  # 1.0, 0.9, 0.8, ...
             score = max(score, 0.3)
 
-            chunks.append(RetrievedChunk(
-                id=f"gnews_{hash(url) % 10**8}",
-                content=description,
-                title=title,
-                url=url,
-                score=score,
-                source_channel=ChannelType.EXTERNAL,
-                metadata={
-                    MetadataKey.PUBLISHED_DATE:      published,
-                    MetadataKey.SOURCE_ENGINE:       "google_news",
-                    MetadataKey.IS_SCRAPING_REQUIRED: True,
-                },
-            ))
+            chunks.append(
+                RetrievedChunk(
+                    id=f"gnews_{hash(url) % 10**8}",
+                    content=description,
+                    title=title,
+                    url=url,
+                    score=score,
+                    source_channel=ChannelType.EXTERNAL,
+                    metadata={
+                        MetadataKey.PUBLISHED_DATE: published,
+                        MetadataKey.SOURCE_ENGINE: "google_news",
+                        MetadataKey.IS_SCRAPING_REQUIRED: True,
+                    },
+                )
+            )
 
         return chunks
 
@@ -154,17 +152,19 @@ class ExternalSearchChannel(SearchChannel):
             score = 1.0 - (i * 0.08)
             score = max(score, 0.3)
 
-            chunks.append(RetrievedChunk(
-                id=f"ddg_{hash(url) % 10**8}",
-                content=body,
-                title=title,
-                url=url,
-                score=score,
-                source_channel=ChannelType.EXTERNAL,
-                metadata={
-                    MetadataKey.SOURCE_ENGINE:       "duckduckgo",
-                    MetadataKey.IS_SCRAPING_REQUIRED: True,
-                },
-            ))
+            chunks.append(
+                RetrievedChunk(
+                    id=f"ddg_{hash(url) % 10**8}",
+                    content=body,
+                    title=title,
+                    url=url,
+                    score=score,
+                    source_channel=ChannelType.EXTERNAL,
+                    metadata={
+                        MetadataKey.SOURCE_ENGINE: "duckduckgo",
+                        MetadataKey.IS_SCRAPING_REQUIRED: True,
+                    },
+                )
+            )
 
         return chunks

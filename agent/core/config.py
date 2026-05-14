@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     minimax_api_key: str = ""
 
     # ── Rate limiting ──────────────────────────────────────────────────────
-    rate_limit_requests: int = 100   # default requests per window
+    rate_limit_requests: int = 100  # default requests per window
     rate_limit_window_seconds: int = 60
     chat_rate_limit_requests: int = 20  # stricter limit for LLM endpoints
 

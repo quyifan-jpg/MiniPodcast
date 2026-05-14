@@ -73,6 +73,7 @@ def ensure_tables():
 # Conversation Summary Store
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def _summary_cache_key(session_id: str) -> str:
     return build_cache_key("memory", "summary", {"session_id": session_id})
 
@@ -102,9 +103,7 @@ def get_summary(session_id: str) -> Optional[Dict[str, Any]]:
     )
 
     if result:
-        sync_redis_cache.set_json(
-            cache_key, result, memory_settings.summary_cache_ttl_s
-        )
+        sync_redis_cache.set_json(cache_key, result, memory_settings.summary_cache_ttl_s)
         return result
 
     return None
@@ -150,13 +149,16 @@ def save_summary(
     sync_redis_cache.delete(_summary_cache_key(session_id))
     logger.debug(
         "Summary saved: session={s} turns={t} summarized_up_to={u}",
-        s=session_id, t=turn_count, u=summarized_up_to,
+        s=session_id,
+        t=turn_count,
+        u=summarized_up_to,
     )
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # User Preferences Store
 # ═══════════════════════════════════════════════════════════════════════
+
 
 def _prefs_cache_key(user_id: str) -> str:
     return build_cache_key("memory", "preferences", {"user_id": user_id})
@@ -188,9 +190,7 @@ def get_preferences(user_id: str) -> Optional[Dict[str, Any]]:
         prefs = result["preferences"]
         if isinstance(prefs, str):
             prefs = json.loads(prefs)
-        sync_redis_cache.set_json(
-            cache_key, prefs, memory_settings.preferences_cache_ttl_s
-        )
+        sync_redis_cache.set_json(cache_key, prefs, memory_settings.preferences_cache_ttl_s)
         return prefs
 
     return None
@@ -235,6 +235,7 @@ def save_preferences(user_id: str, preferences: Dict[str, Any]) -> None:
 # Content History (Layer 4) — reads existing podcasts table
 # ═══════════════════════════════════════════════════════════════════════
 
+
 def get_recent_podcasts(
     max_items: int = 5,
     days_back: int = 30,
@@ -257,7 +258,7 @@ def get_recent_podcasts(
         )
 
         podcasts = []
-        for row in (results or []):
+        for row in results or []:
             sources = []
             if row.get("sources_json"):
                 try:
@@ -265,16 +266,16 @@ def get_recent_podcasts(
                 except (json.JSONDecodeError, TypeError):
                     sources = []
 
-            podcasts.append({
-                "id": row.get("id"),
-                "title": row.get("title", ""),
-                "date": row.get("date", ""),
-                "language": row.get("language_code", "en"),
-                "source_count": len(sources) if isinstance(sources, list) else 0,
-                "source_urls": [
-                    s.get("url", "") for s in (sources if isinstance(sources, list) else [])
-                ][:5],  # Limit to 5 URLs to save context
-            })
+            podcasts.append(
+                {
+                    "id": row.get("id"),
+                    "title": row.get("title", ""),
+                    "date": row.get("date", ""),
+                    "language": row.get("language_code", "en"),
+                    "source_count": len(sources) if isinstance(sources, list) else 0,
+                    "source_urls": [s.get("url", "") for s in (sources if isinstance(sources, list) else [])][:5],  # Limit to 5 URLs to save context
+                }
+            )
         return podcasts
 
     except Exception as e:

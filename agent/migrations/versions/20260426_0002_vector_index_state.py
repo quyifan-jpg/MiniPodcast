@@ -86,51 +86,29 @@ def upgrade() -> None:
             f"COMMENT 'pending|indexing|indexed|stale|failed|disabled'"
         )
     else:
-        op.execute(
-            f"ALTER TABLE `{TABLE}` "
-            f"ALTER COLUMN `embedding_status` SET DEFAULT 'pending'"
-        )
+        op.execute(f"ALTER TABLE `{TABLE}` ALTER COLUMN `embedding_status` SET DEFAULT 'pending'")
 
     # 2. Backfill historical NULLs so the state-machine query picks
     #    them up on the next index_pending run.
-    op.execute(
-        f"UPDATE `{TABLE}` "
-        f"SET `embedding_status` = 'pending' "
-        f"WHERE `embedding_status` IS NULL"
-    )
+    op.execute(f"UPDATE `{TABLE}` SET `embedding_status` = 'pending' WHERE `embedding_status` IS NULL")
 
     # 3. Add the rest of the state fields.
     if not _column_exists(TABLE, "embedding_enabled"):
-        op.execute(
-            f"ALTER TABLE `{TABLE}` "
-            f"ADD COLUMN `embedding_enabled` TINYINT NOT NULL DEFAULT 1 "
-            f"COMMENT '1=visible to RAG, 0=excluded by admin'"
-        )
+        op.execute(f"ALTER TABLE `{TABLE}` ADD COLUMN `embedding_enabled` TINYINT NOT NULL DEFAULT 1 COMMENT '1=visible to RAG, 0=excluded by admin'")
     if not _column_exists(TABLE, "content_hash"):
         op.execute(
-            f"ALTER TABLE `{TABLE}` "
-            f"ADD COLUMN `content_hash` CHAR(64) NULL "
-            f"COMMENT 'SHA-256 of title+content; refreshed on AI analysis success'"
+            f"ALTER TABLE `{TABLE}` ADD COLUMN `content_hash` CHAR(64) NULL COMMENT 'SHA-256 of title+content; refreshed on AI analysis success'"
         )
     if not _column_exists(TABLE, "indexed_hash"):
         op.execute(
-            f"ALTER TABLE `{TABLE}` "
-            f"ADD COLUMN `indexed_hash` CHAR(64) NULL "
-            f"COMMENT 'content_hash at the moment of last successful Milvus index'"
+            f"ALTER TABLE `{TABLE}` ADD COLUMN `indexed_hash` CHAR(64) NULL COMMENT 'content_hash at the moment of last successful Milvus index'"
         )
     if not _column_exists(TABLE, "last_indexed_at"):
-        op.execute(
-            f"ALTER TABLE `{TABLE}` "
-            f"ADD COLUMN `last_indexed_at` DATETIME NULL "
-            f"COMMENT 'Timestamp of last successful Milvus index'"
-        )
+        op.execute(f"ALTER TABLE `{TABLE}` ADD COLUMN `last_indexed_at` DATETIME NULL COMMENT 'Timestamp of last successful Milvus index'")
 
     # 4. Index the columns the state-machine query filters on.
     if not _index_exists(TABLE, INDEX_NAME):
-        op.execute(
-            f"CREATE INDEX `{INDEX_NAME}` ON `{TABLE}` "
-            f"(`embedding_enabled`, `embedding_status`)"
-        )
+        op.execute(f"CREATE INDEX `{INDEX_NAME}` ON `{TABLE}` (`embedding_enabled`, `embedding_status`)")
 
 
 def downgrade() -> None:
@@ -144,7 +122,4 @@ def downgrade() -> None:
     # Drop the default we set in upgrade(); column shape itself is
     # untouched (we never widened/narrowed it, so no MODIFY needed).
     if _column_exists(TABLE, "embedding_status"):
-        op.execute(
-            f"ALTER TABLE `{TABLE}` "
-            f"ALTER COLUMN `embedding_status` DROP DEFAULT"
-        )
+        op.execute(f"ALTER TABLE `{TABLE}` ALTER COLUMN `embedding_status` DROP DEFAULT")

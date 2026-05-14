@@ -28,26 +28,27 @@ from pymilvus import (
 )
 
 ARTICLE_COLLECTION = "article_vectors"
-CHUNK_COLLECTION   = "chunk_vectors"
-VECTOR_DIM         = 1536          # text-embedding-3-small
+CHUNK_COLLECTION = "chunk_vectors"
+VECTOR_DIM = 1536  # text-embedding-3-small
 INDEX_PARAMS = {
-    "metric_type": "IP",           # Inner Product ≈ cosine similarity (on normalised vecs)
-    "index_type":  "HNSW",
-    "params":      {"M": 32, "efConstruction": 100},
+    "metric_type": "IP",  # Inner Product ≈ cosine similarity (on normalised vecs)
+    "index_type": "HNSW",
+    "params": {"M": 32, "efConstruction": 100},
 }
 SEARCH_PARAMS = {"metric_type": "IP", "params": {"ef": 64}}
 
 
 # ── Schemas ───────────────────────────────────────────────────────────
 
+
 def _article_schema() -> CollectionSchema:
     return CollectionSchema(
         fields=[
-            FieldSchema("id",           DataType.INT64,      is_primary=True, auto_id=False),
-            FieldSchema("title",        DataType.VARCHAR,    max_length=1024),
-            FieldSchema("url",          DataType.VARCHAR,    max_length=2048),
-            FieldSchema("summary",      DataType.VARCHAR,    max_length=4096),
-            FieldSchema("vector",       DataType.FLOAT_VECTOR, dim=VECTOR_DIM),
+            FieldSchema("id", DataType.INT64, is_primary=True, auto_id=False),
+            FieldSchema("title", DataType.VARCHAR, max_length=1024),
+            FieldSchema("url", DataType.VARCHAR, max_length=2048),
+            FieldSchema("summary", DataType.VARCHAR, max_length=4096),
+            FieldSchema("vector", DataType.FLOAT_VECTOR, dim=VECTOR_DIM),
         ],
         description="Article-level embeddings",
         enable_dynamic_field=False,
@@ -57,13 +58,13 @@ def _article_schema() -> CollectionSchema:
 def _chunk_schema() -> CollectionSchema:
     return CollectionSchema(
         fields=[
-            FieldSchema("id",           DataType.INT64,      is_primary=True, auto_id=False),
-            FieldSchema("article_id",   DataType.INT64),
-            FieldSchema("chunk_index",  DataType.INT32),
-            FieldSchema("chunk_text",   DataType.VARCHAR,    max_length=8192),
-            FieldSchema("title",        DataType.VARCHAR,    max_length=1024),
-            FieldSchema("url",          DataType.VARCHAR,    max_length=2048),
-            FieldSchema("vector",       DataType.FLOAT_VECTOR, dim=VECTOR_DIM),
+            FieldSchema("id", DataType.INT64, is_primary=True, auto_id=False),
+            FieldSchema("article_id", DataType.INT64),
+            FieldSchema("chunk_index", DataType.INT32),
+            FieldSchema("chunk_text", DataType.VARCHAR, max_length=8192),
+            FieldSchema("title", DataType.VARCHAR, max_length=1024),
+            FieldSchema("url", DataType.VARCHAR, max_length=2048),
+            FieldSchema("vector", DataType.FLOAT_VECTOR, dim=VECTOR_DIM),
         ],
         description="Chunk-level embeddings for RAG",
         enable_dynamic_field=False,
@@ -72,10 +73,11 @@ def _chunk_schema() -> CollectionSchema:
 
 # ── Collection wrapper ────────────────────────────────────────────────
 
+
 @dataclass
 class MilvusClient:
     article: Collection
-    chunk:   Collection
+    chunk: Collection
 
     def insert_articles(self, rows: List[dict]) -> int:
         """Insert article vectors. rows must have keys matching schema fields."""
@@ -90,8 +92,7 @@ class MilvusClient:
         """Insert chunk vectors. rows must have keys matching schema fields."""
         if not rows:
             return 0
-        data = {f: [r[f] for r in rows]
-                for f in ("id", "article_id", "chunk_index", "chunk_text", "title", "url", "vector")}
+        data = {f: [r[f] for r in rows] for f in ("id", "article_id", "chunk_index", "chunk_text", "title", "url", "vector")}
         self.chunk.insert(list(data.values()))
         self.chunk.flush()
         return len(rows)
@@ -104,9 +105,7 @@ class MilvusClient:
         res = self.chunk.query(f"article_id == {article_id}", output_fields=["id"], limit=1)
         return len(res) > 0
 
-    def search_articles(
-        self, vector: List[float], top_k: int = 20
-    ) -> List[dict]:
+    def search_articles(self, vector: List[float], top_k: int = 20) -> List[dict]:
         self.article.load()
         results = self.article.search(
             data=[vector],
@@ -117,18 +116,18 @@ class MilvusClient:
         )
         out = []
         for hit in results[0]:
-            out.append({
-                "article_id": hit.entity.get("id"),
-                "title":      hit.entity.get("title", ""),
-                "url":        hit.entity.get("url", ""),
-                "summary":    hit.entity.get("summary", ""),
-                "score":      hit.score,          # IP score, higher = more similar
-            })
+            out.append(
+                {
+                    "article_id": hit.entity.get("id"),
+                    "title": hit.entity.get("title", ""),
+                    "url": hit.entity.get("url", ""),
+                    "summary": hit.entity.get("summary", ""),
+                    "score": hit.score,  # IP score, higher = more similar
+                }
+            )
         return out
 
-    def search_chunks(
-        self, vector: List[float], top_k: int = 30
-    ) -> List[dict]:
+    def search_chunks(self, vector: List[float], top_k: int = 30) -> List[dict]:
         self.chunk.load()
         results = self.chunk.search(
             data=[vector],
@@ -139,15 +138,17 @@ class MilvusClient:
         )
         out = []
         for hit in results[0]:
-            out.append({
-                "chunk_id":    hit.entity.get("id"),
-                "article_id":  hit.entity.get("article_id"),
-                "chunk_index": hit.entity.get("chunk_index"),
-                "chunk_text":  hit.entity.get("chunk_text", ""),
-                "title":       hit.entity.get("title", ""),
-                "url":         hit.entity.get("url", ""),
-                "score":       hit.score,
-            })
+            out.append(
+                {
+                    "chunk_id": hit.entity.get("id"),
+                    "article_id": hit.entity.get("article_id"),
+                    "chunk_index": hit.entity.get("chunk_index"),
+                    "chunk_text": hit.entity.get("chunk_text", ""),
+                    "title": hit.entity.get("title", ""),
+                    "url": hit.entity.get("url", ""),
+                    "score": hit.score,
+                }
+            )
         return out
 
     def delete_article(self, article_id: int):
@@ -156,6 +157,7 @@ class MilvusClient:
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────
+
 
 def _ensure_collection(name: str, schema_fn) -> Collection:
     if not utility.has_collection(name):
@@ -187,7 +189,7 @@ def get_milvus() -> MilvusClient:
     logger.info("Connected to Milvus at {}:{}", host, port)
 
     article_col = _ensure_collection(ARTICLE_COLLECTION, _article_schema)
-    chunk_col   = _ensure_collection(CHUNK_COLLECTION,   _chunk_schema)
+    chunk_col = _ensure_collection(CHUNK_COLLECTION, _chunk_schema)
 
     _client = MilvusClient(article=article_col, chunk=chunk_col)
     return _client
