@@ -1,10 +1,20 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 const Navbar = () => {
    const location = useLocation();
+   const navigate = useNavigate();
+   const { user, logout } = useAuth();
    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+   const [userMenuOpen, setUserMenuOpen] = useState(false);
    const isActive = path => location.pathname === path || location.pathname.startsWith(`${path}/`);
+
+   const handleLogout = () => {
+      logout();
+      setUserMenuOpen(false);
+      navigate('/');
+   };
 
    return (
       <nav className="bg-black border-b border-gray-800 shadow-md relative overflow-hidden">
@@ -60,8 +70,8 @@ const Navbar = () => {
                      </svg>
                   </button>
                </div>
-               <div className="hidden md:block">
-                  <div className="ml-10 flex items-baseline space-x-4">
+               <div className="hidden md:flex items-center gap-4">
+                  <div className="flex items-baseline space-x-4">
                      <Link
                         to="/"
                         className={`px-3 py-2 text-sm font-medium relative ${
@@ -154,6 +164,44 @@ const Navbar = () => {
                         )}
                      </Link>
                   </div>
+
+                  {/* User area */}
+                  {user ? (
+                     <div className="relative">
+                        <button
+                           onClick={() => setUserMenuOpen(o => !o)}
+                           className="flex items-center gap-2 px-2 py-1 rounded-lg text-sm text-gray-300 hover:text-gray-100 hover:bg-gray-800 transition-colors"
+                        >
+                           <span className="w-7 h-7 rounded-full bg-emerald-600 flex items-center justify-center text-xs font-bold text-white uppercase">
+                              {user.username?.[0] ?? user.email[0]}
+                           </span>
+                           <span className="max-w-[100px] truncate">{user.username ?? user.email}</span>
+                           <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                           </svg>
+                        </button>
+                        {userMenuOpen && (
+                           <div className="absolute right-0 mt-2 w-44 bg-gray-900 border border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                              <div className="px-4 py-2.5 border-b border-gray-800">
+                                 <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                              </div>
+                              <button
+                                 onClick={handleLogout}
+                                 className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-gray-800 transition-colors"
+                              >
+                                 Sign out
+                              </button>
+                           </div>
+                        )}
+                     </div>
+                  ) : (
+                     <Link
+                        to="/login"
+                        className="px-4 py-1.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
+                     >
+                        Sign In
+                     </Link>
+                  )}
                </div>
             </div>
          </div>
@@ -243,6 +291,22 @@ const Navbar = () => {
                >
                   Sources
                </Link>
+               {user ? (
+                  <button
+                     onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                     className="text-lg text-red-400"
+                  >
+                     Sign out ({user.username ?? user.email})
+                  </button>
+               ) : (
+                  <Link
+                     to="/login"
+                     onClick={() => setIsMobileMenuOpen(false)}
+                     className="text-lg text-emerald-400"
+                  >
+                     Sign In
+                  </Link>
+               )}
             </div>
          </div>
       </nav>

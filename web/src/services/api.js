@@ -14,6 +14,10 @@ const api = axios.create({
 
 api.interceptors.request.use(
    config => {
+      const token = localStorage.getItem('mp_access_token');
+      if (token) {
+         config.headers['Authorization'] = `Bearer ${token}`;
+      }
       return config;
    },
    error => {
@@ -258,6 +262,12 @@ const endpoints = {
       setupSession: (sites = null) => {
          return api.post('/api/social-media/session/setup', null, {});
       },
+   },
+
+   auth: {
+      register: data => api.post('/api/auth/register', data),
+      login:    data => api.post('/api/auth/login', data),
+      me:       ()   => api.get('/api/auth/me'),
    },
 
    API_BASE_URL: API_BASE_URL,

@@ -1,6 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import ProtectedRoute from './components/ProtectedRoute';
+import Login from './pages/Login';
 import Home from './pages/Home';
 import Articles from './pages/Articles';
 import ArticleDetail from './pages/ArticleDetail';
@@ -32,11 +35,13 @@ const AppLayout = ({ children }) => {
 
 function App() {
   return (
+    <AuthProvider>
     <Router>
       <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-gray-200 flex flex-col">
         <Routes>
-          <Route path="/studio" element={<StudioLanding />} />
-          <Route path="/studio/chat/:sessionId" element={<StudioChat />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/studio" element={<ProtectedRoute><StudioLanding /></ProtectedRoute>} />
+          <Route path="/studio/chat/:sessionId" element={<ProtectedRoute><StudioChat /></ProtectedRoute>} />
           <Route
             path="/"
             element={
@@ -136,6 +141,7 @@ function App() {
         </Routes>
       </div>
     </Router>
+    </AuthProvider>
   );
 }
 
