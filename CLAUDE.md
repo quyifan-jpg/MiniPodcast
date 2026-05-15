@@ -139,3 +139,4 @@ All settings are documented in `agent/core/config.py`.
 - **No authentication layer yet** — the API is open; do not expose port 8000 publicly without a proxy.
 - Generated media (audio, images, recordings) lives in `agent/podcasts/`; databases in `agent/databases/`. Both are volume-mounted in Docker.
 - The React build is served directly by FastAPI from `../web/build` (env `CLIENT_BUILD_PATH`). Run `npm run build` in `web/` before starting the backend without the dev server.
+
