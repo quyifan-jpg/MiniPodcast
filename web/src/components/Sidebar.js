@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, LogOut } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const Sidebar = ({ onNewSession, onSessionSelect }) => {
    const [sessions, setSessions] = useState([]);
@@ -20,6 +21,12 @@ const Sidebar = ({ onNewSession, onSessionSelect }) => {
    const [isDeleting, setIsDeleting] = useState(false);
    const navigate = useNavigate();
    const { sessionId } = useParams();
+   const { user, logout } = useAuth();
+
+   const handleLogout = () => {
+      logout();
+      navigate('/login', { replace: true });
+   };
 
    useEffect(() => {
       loadSessions();
@@ -594,6 +601,27 @@ const Sidebar = ({ onNewSession, onSessionSelect }) => {
                   </>
                )}
             </button>
+            {user && (
+               <div className="mt-2 flex items-center justify-between px-2 py-1.5 rounded-md bg-gray-800/30 border border-gray-700/30">
+                  <Link
+                     to="/account"
+                     className="min-w-0 flex-1 group"
+                     title="Account settings"
+                  >
+                     <div className="text-xs font-medium text-white truncate group-hover:text-emerald-400 transition-colors">
+                        {user.username}
+                     </div>
+                     <div className="text-[10px] text-gray-500 truncate">{user.email}</div>
+                  </Link>
+                  <button
+                     onClick={handleLogout}
+                     title="Sign out"
+                     className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-800/60 rounded-md transition-colors"
+                  >
+                     <LogOut className="w-3.5 h-3.5" />
+                  </button>
+               </div>
+            )}
          </div>
          {showDeleteModal && (
             <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">

@@ -39,7 +39,8 @@ class Settings(BaseSettings):
     # ── Auth ───────────────────────────────────────────────────────────────
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
-    jwt_expire_minutes: int = 60 * 24 * 7  # 7 days
+    jwt_expire_minutes: int = 30  # short-lived access token (30 min)
+    jwt_refresh_expire_minutes: int = 60 * 24 * 14  # long-lived refresh token (14 days)
 
     # ── CORS ───────────────────────────────────────────────────────────────
     # Override via env: ALLOWED_ORIGINS='["http://localhost:3000","https://myapp.com"]'

@@ -1,10 +1,18 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
 const Navbar = () => {
    const location = useLocation();
+   const navigate = useNavigate();
+   const { user, logout } = useAuth();
    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
    const isActive = path => location.pathname === path || location.pathname.startsWith(`${path}/`);
+
+   const handleLogout = () => {
+      logout();
+      navigate('/login');
+   };
 
    return (
       <nav className="bg-black border-b border-gray-800 shadow-md relative overflow-hidden">
@@ -153,6 +161,38 @@ const Navbar = () => {
                            <span className="absolute -bottom-0.5 left-0 w-full h-0.5 bg-emerald-400 blur-sm opacity-70"></span>
                         )}
                      </Link>
+                     {user ? (
+                        <div className="flex items-center space-x-2 pl-3 ml-2 border-l border-gray-800">
+                           <Link
+                              to="/account"
+                              className="text-sm text-gray-300 hover:text-emerald-400 transition-colors"
+                              title="Account settings"
+                           >
+                              {user.username}
+                           </Link>
+                           <button
+                              onClick={handleLogout}
+                              className="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"
+                           >
+                              Sign out
+                           </button>
+                        </div>
+                     ) : (
+                        <div className="flex items-center space-x-2 pl-3 ml-2 border-l border-gray-800">
+                           <Link
+                              to="/login"
+                              className="px-3 py-1.5 text-sm text-gray-300 hover:text-white"
+                           >
+                              Sign in
+                           </Link>
+                           <Link
+                              to="/register"
+                              className="px-3 py-1.5 text-sm bg-emerald-700 hover:bg-emerald-600 text-white rounded transition-colors"
+                           >
+                              Sign up
+                           </Link>
+                        </div>
+                     )}
                   </div>
                </div>
             </div>

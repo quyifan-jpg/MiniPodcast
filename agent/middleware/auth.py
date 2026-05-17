@@ -42,13 +42,15 @@ _PUBLIC_PATHS = frozenset(
         "/manifest.json",
         "/api/auth/register",
         "/api/auth/login",
+        "/api/auth/refresh",
     ]
 )
 
 # Path prefixes that REQUIRE authentication
 # Tighten this list gradually as the frontend adopts token auth.
 _PROTECTED_PREFIXES = [
-    "/api/auth/me",  # user profile — always needs token
+    "/api/auth/me",  # GET/PATCH/DELETE current user
+    "/api/auth/change-password",  # change password
     "/api/podcast-agent",  # chat sessions — always user-scoped
     # "/api/podcasts",       # uncomment to protect podcast management
     # "/api/tasks",          # uncomment to protect task management
@@ -135,12 +137,37 @@ def create_access_token(user_id: str, extra_claims: dict = None) -> str:
 
     payload = {
         "sub": user_id,
+        "type": "access",
         "iat": int(time.time()),
         "exp": int(time.time()) + settings.jwt_expire_minutes * 60,
     }
     if extra_claims:
         payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+
+def create_refresh_token(user_id: str) -> str:
+    """
+    Create a long-lived JWT refresh token. Same secret, different `type` claim
+    so /api/auth/refresh can distinguish it from an access token.
+    """
+    import time
+
+    payload = {
+        "sub": user_id,
+        "type": "refresh",
+        "iat": int(time.time()),
+        "exp": int(time.time()) + settings.jwt_refresh_expire_minutes * 60,
+    }
+    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+
+def verify_refresh_token(token: str) -> str | None:
+    """Verify a refresh token. Returns user_id string or None."""
+    payload = _verify_jwt(token)
+    if not payload or payload.get("type") != "refresh":
+        return None
+    return str(payload.get("sub", "")) or None
 
 
 def _extract_token(request: Request) -> str | None:
