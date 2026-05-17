@@ -13,6 +13,7 @@ const api = axios.create({
 });
 
 export const TOKEN_STORAGE_KEY = 'miniblog_access_token';
+export const REFRESH_TOKEN_STORAGE_KEY = 'miniblog_refresh_token';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -24,6 +25,35 @@ let onRateLimited = null;
 export const setAuthHandlers = ({ onUnauthorized: u, onRateLimited: r }) => {
    onUnauthorized = u || null;
    onRateLimited = r || null;
+};
+
+// Single in-flight refresh promise — concurrent 401s share one /refresh call.
+let refreshInFlight = null;
+
+const refreshAccessToken = async () => {
+   const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+   if (!refreshToken) {
+      throw new Error('No refresh token available');
+   }
+   if (!refreshInFlight) {
+      // Use a bare axios instance so the request bypasses our interceptors —
+      // avoids recursion if the refresh itself 401s.
+      refreshInFlight = axios
+         .post(
+            `${API_BASE_URL}/api/auth/refresh`,
+            { refresh_token: refreshToken },
+            { headers: { 'Content-Type': 'application/json' } }
+         )
+         .then(res => {
+            const newAccess = res.data.access_token;
+            localStorage.setItem(TOKEN_STORAGE_KEY, newAccess);
+            return newAccess;
+         })
+         .finally(() => {
+            refreshInFlight = null;
+         });
+   }
+   return refreshInFlight;
 };
 
 api.interceptors.request.use(
@@ -58,16 +88,37 @@ api.interceptors.response.use(
       }
       return response;
    },
-   error => {
+   async error => {
       if (error.response) {
          if (isDev) {
             console.error('API Error:', error.response.status, error.response.data);
          }
          const url = error.config?.url || '';
          const isAuthRoute =
-            url.includes('/api/auth/login') || url.includes('/api/auth/register');
+            url.includes('/api/auth/login') ||
+            url.includes('/api/auth/register') ||
+            url.includes('/api/auth/refresh');
+
          if (error.response.status === 401 && !isAuthRoute) {
+            const originalRequest = error.config;
+            // Try one auto-refresh before giving up.
+            if (
+               !originalRequest._retriedAfterRefresh &&
+               localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)
+            ) {
+               originalRequest._retriedAfterRefresh = true;
+               try {
+                  const newAccess = await refreshAccessToken();
+                  originalRequest.headers = originalRequest.headers || {};
+                  originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+                  return api(originalRequest);
+               } catch (refreshErr) {
+                  if (isDev) console.warn('Token refresh failed:', refreshErr?.message);
+                  // fall through to logout
+               }
+            }
             localStorage.removeItem(TOKEN_STORAGE_KEY);
+            localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
             if (onUnauthorized) {
                onUnauthorized();
             }
@@ -106,7 +157,17 @@ const endpoints = {
          api.post('/api/auth/register', { email, username, password }),
       login: ({ email, password }) =>
          api.post('/api/auth/login', { email, password }),
+      refresh: refreshToken =>
+         api.post('/api/auth/refresh', { refresh_token: refreshToken }),
       me: () => api.get('/api/auth/me'),
+      updateProfile: ({ username, email }) =>
+         api.patch('/api/auth/me', { username, email }),
+      changePassword: ({ currentPassword, newPassword }) =>
+         api.post('/api/auth/change-password', {
+            current_password: currentPassword,
+            new_password: newPassword,
+         }),
+      deactivateAccount: () => api.delete('/api/auth/me'),
    },
    articles: {
       getAll: (params = {}) => api.get('/api/articles/', { params }),

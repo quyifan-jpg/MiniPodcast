@@ -19,6 +19,7 @@ import SocialMediaDetail from './pages/SocialMediaDetail';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import NotFound from './pages/NotFound';
+import Account from './pages/Account';
 
 const AppLayout = ({ children }) => {
   const location = useLocation();
@@ -56,6 +57,16 @@ function App() {
             element={
               <ProtectedRoute>
                 <StudioChat />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/account"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Account />
+                </AppLayout>
               </ProtectedRoute>
             }
           />

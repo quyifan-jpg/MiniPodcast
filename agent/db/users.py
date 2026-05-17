@@ -76,3 +76,38 @@ def deactivate_user(user_id: int) -> None:
         "UPDATE users SET is_active = FALSE WHERE id = %s",
         (user_id,),
     )
+
+
+def update_user_username(user_id: int, username: str) -> None:
+    execute_query(
+        _db(),
+        "UPDATE users SET username = %s WHERE id = %s",
+        (username, user_id),
+    )
+
+
+def update_user_email(user_id: int, email: str) -> None:
+    execute_query(
+        _db(),
+        "UPDATE users SET email = %s WHERE id = %s",
+        (email, user_id),
+    )
+
+
+def update_user_password(user_id: int, hashed_password: str) -> None:
+    execute_query(
+        _db(),
+        "UPDATE users SET hashed_password = %s WHERE id = %s",
+        (hashed_password, user_id),
+    )
+
+
+def get_password_hash(user_id: int) -> str | None:
+    """Return the stored bcrypt hash for change-password verification."""
+    row = execute_query(
+        _db(),
+        "SELECT hashed_password FROM users WHERE id = %s LIMIT 1",
+        (user_id,),
+        fetch_one=True,
+    )
+    return row["hashed_password"] if row else None

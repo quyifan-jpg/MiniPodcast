@@ -163,7 +163,13 @@ const Navbar = () => {
                      </Link>
                      {user ? (
                         <div className="flex items-center space-x-2 pl-3 ml-2 border-l border-gray-800">
-                           <span className="text-sm text-gray-300">{user.username}</span>
+                           <Link
+                              to="/account"
+                              className="text-sm text-gray-300 hover:text-emerald-400 transition-colors"
+                              title="Account settings"
+                           >
+                              {user.username}
+                           </Link>
                            <button
                               onClick={handleLogout}
                               className="px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"

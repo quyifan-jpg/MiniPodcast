@@ -1,6 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import api, { TOKEN_STORAGE_KEY, setAuthHandlers } from '../services/api';
+import api, {
+   TOKEN_STORAGE_KEY,
+   REFRESH_TOKEN_STORAGE_KEY,
+   setAuthHandlers,
+} from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -12,19 +16,26 @@ export const AuthProvider = ({ children }) => {
    const navigate = useNavigate();
    const location = useLocation();
 
-   const persistToken = useCallback(nextToken => {
-      if (nextToken) {
-         localStorage.setItem(TOKEN_STORAGE_KEY, nextToken);
+   const persistTokens = useCallback((accessToken, refreshToken) => {
+      if (accessToken) {
+         localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
       } else {
          localStorage.removeItem(TOKEN_STORAGE_KEY);
       }
-      setToken(nextToken);
+      if (refreshToken !== undefined) {
+         if (refreshToken) {
+            localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
+         } else {
+            localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+         }
+      }
+      setToken(accessToken);
    }, []);
 
    useEffect(() => {
       setAuthHandlers({
          onUnauthorized: () => {
-            setToken(null);
+            persistTokens(null, null);
             setUser(null);
             const path = location.pathname + location.search;
             if (location.pathname !== '/login' && location.pathname !== '/register') {
@@ -42,7 +53,7 @@ export const AuthProvider = ({ children }) => {
          },
       });
       return () => setAuthHandlers({ onUnauthorized: null, onRateLimited: null });
-   }, [navigate, location.pathname, location.search]);
+   }, [navigate, location.pathname, location.search, persistTokens]);
 
    const fetchMe = useCallback(async () => {
       try {
@@ -51,10 +62,12 @@ export const AuthProvider = ({ children }) => {
          return res.data;
       } catch (err) {
          setUser(null);
-         persistToken(null);
+         // Don't drop the refresh token here — the interceptor already
+         // attempted refresh; if /me still 401s, the unauthorized handler
+         // clears both tokens.
          throw err;
       }
-   }, [persistToken]);
+   }, []);
 
    useEffect(() => {
       if (!token) {
@@ -78,7 +91,7 @@ export const AuthProvider = ({ children }) => {
 
    const login = async ({ email, password }) => {
       const res = await api.auth.login({ email, password });
-      persistToken(res.data.access_token);
+      persistTokens(res.data.access_token, res.data.refresh_token);
       const me = await api.auth.me();
       setUser(me.data);
       return me.data;
@@ -86,16 +99,22 @@ export const AuthProvider = ({ children }) => {
 
    const register = async ({ email, username, password }) => {
       const res = await api.auth.register({ email, username, password });
-      persistToken(res.data.access_token);
+      persistTokens(res.data.access_token, res.data.refresh_token);
       const me = await api.auth.me();
       setUser(me.data);
       return me.data;
    };
 
    const logout = () => {
-      persistToken(null);
+      persistTokens(null, null);
       setUser(null);
    };
+
+   const refreshUser = useCallback(async () => {
+      const me = await api.auth.me();
+      setUser(me.data);
+      return me.data;
+   }, []);
 
    const value = {
       user,
@@ -105,6 +124,7 @@ export const AuthProvider = ({ children }) => {
       login,
       register,
       logout,
+      refreshUser,
       rateLimitMessage,
    };
 

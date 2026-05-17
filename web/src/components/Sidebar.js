@@ -603,10 +603,16 @@ const Sidebar = ({ onNewSession, onSessionSelect }) => {
             </button>
             {user && (
                <div className="mt-2 flex items-center justify-between px-2 py-1.5 rounded-md bg-gray-800/30 border border-gray-700/30">
-                  <div className="min-w-0">
-                     <div className="text-xs font-medium text-white truncate">{user.username}</div>
+                  <Link
+                     to="/account"
+                     className="min-w-0 flex-1 group"
+                     title="Account settings"
+                  >
+                     <div className="text-xs font-medium text-white truncate group-hover:text-emerald-400 transition-colors">
+                        {user.username}
+                     </div>
                      <div className="text-[10px] text-gray-500 truncate">{user.email}</div>
-                  </div>
+                  </Link>
                   <button
                      onClick={handleLogout}
                      title="Sign out"
