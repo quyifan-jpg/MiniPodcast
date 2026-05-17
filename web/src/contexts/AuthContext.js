@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import api, { TOKEN_STORAGE_KEY } from '../services/api';
+import { useNavigate, useLocation } from 'react-router-dom';
+import api, { TOKEN_STORAGE_KEY, setAuthHandlers } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -7,6 +8,9 @@ export const AuthProvider = ({ children }) => {
    const [user, setUser] = useState(null);
    const [token, setToken] = useState(() => localStorage.getItem(TOKEN_STORAGE_KEY));
    const [loading, setLoading] = useState(Boolean(localStorage.getItem(TOKEN_STORAGE_KEY)));
+   const [rateLimitMessage, setRateLimitMessage] = useState(null);
+   const navigate = useNavigate();
+   const location = useLocation();
 
    const persistToken = useCallback(nextToken => {
       if (nextToken) {
@@ -16,6 +20,29 @@ export const AuthProvider = ({ children }) => {
       }
       setToken(nextToken);
    }, []);
+
+   useEffect(() => {
+      setAuthHandlers({
+         onUnauthorized: () => {
+            setToken(null);
+            setUser(null);
+            const path = location.pathname + location.search;
+            if (location.pathname !== '/login' && location.pathname !== '/register') {
+               navigate(`/login?redirect=${encodeURIComponent(path)}`, { replace: true });
+            }
+         },
+         onRateLimited: response => {
+            const retryAfter = response?.headers?.['retry-after'];
+            setRateLimitMessage(
+               retryAfter
+                  ? `Too many requests. Try again in ${retryAfter}s.`
+                  : 'Too many requests. Please slow down and try again shortly.'
+            );
+            setTimeout(() => setRateLimitMessage(null), 5000);
+         },
+      });
+      return () => setAuthHandlers({ onUnauthorized: null, onRateLimited: null });
+   }, [navigate, location.pathname, location.search]);
 
    const fetchMe = useCallback(async () => {
       try {
@@ -78,9 +105,22 @@ export const AuthProvider = ({ children }) => {
       login,
       register,
       logout,
+      rateLimitMessage,
    };
 
-   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+   return (
+      <AuthContext.Provider value={value}>
+         {children}
+         {rateLimitMessage && (
+            <div
+               role="alert"
+               className="fixed bottom-4 right-4 z-50 px-4 py-3 bg-amber-900/90 border border-amber-700 text-amber-100 rounded shadow-lg max-w-sm text-sm"
+            >
+               {rateLimitMessage}
+            </div>
+         )}
+      </AuthContext.Provider>
+   );
 };
 
 export const useAuth = () => {

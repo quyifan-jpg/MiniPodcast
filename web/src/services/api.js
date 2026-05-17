@@ -14,6 +14,18 @@ const api = axios.create({
 
 export const TOKEN_STORAGE_KEY = 'miniblog_access_token';
 
+const isDev = process.env.NODE_ENV !== 'production';
+
+// Hooks injected by AuthProvider so the interceptor can navigate / surface
+// errors through React Router instead of doing a full-page reload.
+let onUnauthorized = null;
+let onRateLimited = null;
+
+export const setAuthHandlers = ({ onUnauthorized: u, onRateLimited: r }) => {
+   onUnauthorized = u || null;
+   onRateLimited = r || null;
+};
+
 api.interceptors.request.use(
    config => {
       const token = localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -48,21 +60,23 @@ api.interceptors.response.use(
    },
    error => {
       if (error.response) {
-         console.error('API Error:', error.response.data);
-         if (error.response.status === 401) {
-            const url = error.config?.url || '';
-            const isAuthRoute = url.includes('/api/auth/login') || url.includes('/api/auth/register');
-            if (!isAuthRoute) {
-               localStorage.removeItem(TOKEN_STORAGE_KEY);
-               if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
-                  const redirect = encodeURIComponent(window.location.pathname + window.location.search);
-                  window.location.href = `/login?redirect=${redirect}`;
-               }
+         if (isDev) {
+            console.error('API Error:', error.response.status, error.response.data);
+         }
+         const url = error.config?.url || '';
+         const isAuthRoute =
+            url.includes('/api/auth/login') || url.includes('/api/auth/register');
+         if (error.response.status === 401 && !isAuthRoute) {
+            localStorage.removeItem(TOKEN_STORAGE_KEY);
+            if (onUnauthorized) {
+               onUnauthorized();
             }
+         } else if (error.response.status === 429 && onRateLimited) {
+            onRateLimited(error.response);
          }
       } else if (error.request) {
-         console.error('No response received:', error.request);
-      } else {
+         if (isDev) console.error('No response received:', error.request);
+      } else if (isDev) {
          console.error('Error setting up request:', error.message);
       }
       return Promise.reject(error);

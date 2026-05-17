@@ -18,6 +18,7 @@ import SocialMedia from './pages/SocialMedia';
 import SocialMediaDetail from './pages/SocialMediaDetail';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import NotFound from './pages/NotFound';
 
 const AppLayout = ({ children }) => {
   const location = useLocation();
@@ -154,6 +155,14 @@ function App() {
     </AppLayout>
   }
 />
+          <Route
+            path="*"
+            element={
+              <AppLayout>
+                <NotFound />
+              </AppLayout>
+            }
+          />
         </Routes>
       </div>
       </AuthProvider>
